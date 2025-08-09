@@ -19,11 +19,11 @@ import subprocess
 
 def get_file_line_cnt(fp):
     # count file lines
-    #result = subprocess.run(["wc", "-l", fp], capture_output=True, text=True)
-    #line_count = result.stdout.strip().split()[0]
-    #return int(line_count)
+    # result = subprocess.run(["wc", "-l", fp], capture_output=True, text=True)
+    # line_count = result.stdout.strip().split()[0]
+    # return int(line_count)
     line_count = 0
-    with open(fp, 'r') as f:
+    with open(fp, "r") as f:
         for line in f:
             line_count += 1
     return line_count
@@ -132,18 +132,20 @@ class LazyLoader:
     def get_one_hot_embedding(token_id: int) -> torch.Tensor:
         """
         Generates a one-hot encoded tensor for a given token ID.
-    
+
         Args:
             tokenizer: The tokenizers.Tokenizer instance.
             token_id: The integer ID of the token to one-hot encode.
-    
+
         Returns:
             A 1D torch.Tensor representing the one-hot encoding.
         """
         vocab_size = self.tokenizer.get_vocab_size()
         if not (0 <= token_id < vocab_size):
-            raise ValueError(f"Token ID {token_id} is out of vocabulary range (0 to {vocab_size - 1}).")
-    
+            raise ValueError(
+                f"Token ID {token_id} is out of vocabulary range (0 to {vocab_size - 1})."
+            )
+
         one_hot_vector = torch.zeros(vocab_size, dtype=torch.float)
         one_hot_vector[token_id] = 1.0
         return one_hot_vector
@@ -152,15 +154,15 @@ class LazyLoader:
         enc = self.tokenizer.encode(line)
         ids = enc.ids
         mask_id = self.tokenizer.token_to_id("<mask>")
-        
+
         ids_len = len(ids)
-        masked_count = int(ids_len*0.22)
+        masked_count = int(ids_len * 0.22)
 
         choosen_elements = random.sample(list(range(ids_len)), masked_count)
         choosen_elements.sort()
-        
+
         random_elements = list(choosen_elements)
-        random.shuffle(random_elements);
+        random.shuffle(random_elements)
 
         result_batch = []
 
@@ -168,11 +170,17 @@ class LazyLoader:
             cur_ids = list(ids)
             tgt_mask = torch.zeros(len(cur_ids), dtype=torch.bool)
             label_id = cur_ids[idx]
-            cur_ids[idx] = mask_id;
-            tgt_mask[random_elements[i+1:]] = 1
+            cur_ids[idx] = mask_id
+            tgt_mask[random_elements[i + 1 :]] = 1
             src_ids = [self.start_id] + ids + [self.end_id]
             tgt_mask = torch.cat((0, tgt_mask, 0))
-            result_batch.append((torch.tensor(src_ids, dtype=torch.long), tgt_mask, self.get_one_hot_embedding(label_id)))
+            result_batch.append(
+                (
+                    torch.tensor(src_ids, dtype=torch.long),
+                    tgt_mask,
+                    torch.tensor(label_id,dtype=torch.long),
+                )
+            )
         return result_batch
 
     def loader(self):
