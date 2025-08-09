@@ -178,7 +178,7 @@ class LazyLoader:
                 (
                     torch.tensor(src_ids, dtype=torch.long),
                     tgt_mask,
-                    torch.tensor(label_id,dtype=torch.long),
+                    torch.tensor(label_id, dtype=torch.long),
                 )
             )
         return result_batch

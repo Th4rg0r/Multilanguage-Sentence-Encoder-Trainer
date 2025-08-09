@@ -9,7 +9,6 @@ import torch.nn as nn
 import torch.optim as optim
 
 
-
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     parser = argparse.ArgumentParser()
@@ -23,10 +22,7 @@ def main():
     )
     parser.add_argument("--clear_model", action="store_true", help="clears the model")
     parser.add_argument(
-        "--epochs",
-        type=int, 
-        default=10,
-        help="the number of epochs to train"
+        "--epochs", type=int, default=10, help="the number of epochs to train"
     )
     parser.add_argument(
         "--learning_rate",
@@ -80,7 +76,7 @@ def main():
     pad_id = tokenizer.token_to_id("<pad>")
     criterion = nn.CrossEntropyLoss(ignore_index=pad_id)
     optimizer = optim.Adam(model.parameters(), lr=args.learning_rate)
-        
+
     model.train()
     print("start training")
 
@@ -91,25 +87,27 @@ def main():
             train_loader = lazy_train_loader.loader()
             for idx, batch in enumerate(train_loader):
                 if idx > max_batches:
-                    break;
+                    break
                 batch_count += 1
                 batch = lazy_train_loader.collate_fn(batch)
-                src_batch, mask_batch, labels_batch = batch 
-                
+                src_batch, mask_batch, labels_batch = batch
+
                 src_batch = src_batch.to(device)
                 mask_batch = mask_batch.to(device)
                 labels_batch = labels_batch.to(device)
-                optimizer.zero_grad();
+                optimizer.zero_grad()
 
                 outputs = model(src_batch, mask_batch)
-                loss =  criterion(outputs, labels_batch)
+                loss = criterion(outputs, labels_batch)
                 loss.backward()
                 clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
-                epoch_loss += loss.item();
-                bar.text( "Loss: " + str(loss.item())
+                epoch_loss += loss.item()
+                bar.text("Loss: " + str(loss.item()))
                 bar()
         avg_loss = epoch_loss / batch_count
         loss_history.append(avg_loss)
+
+
 if __name__ == "__main__":
     main()
