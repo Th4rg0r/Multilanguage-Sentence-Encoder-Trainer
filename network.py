@@ -43,7 +43,7 @@ class Encoder(nn.Module):
         self.vocab_size = vocab_size
         self.d_model = d_model
         self.n_head = n_head
-        self.num_layers = num_layer
+        self.num_layers = num_layers
         self.dim_feed_forward = 2048
         self.dropout = droupout
 

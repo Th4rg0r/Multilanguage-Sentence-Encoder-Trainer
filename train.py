@@ -2,8 +2,10 @@ from alive_progress import alive_bar
 from dataset import LazyLoader, split_train_test_set
 from network import PositionalEncoding, Encoder
 from tokenizer import tokenize
-from torch.nn.utils import clib_grad_norm_
+from tokenizers import Tokenizer
+from torch.nn.utils import clip_grad_norm_
 import argparse
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -37,13 +39,13 @@ def main():
     batch_size = 32
     max_word_per_sentence = 10000
     max_batches = 1000
-    models_dir = os.path.join((out_dir, "models"))
-    model_path = os.path.join((models_dir, "model.pt"))
-    data_dir = os.path.join((out_dir, "datasets"))
-    train_path = os.path.join((data_dir, "train.txt"))
-    eval_path = os.path.join((data_dir, "eval.txt"))
-    test_path = os.path.join((data_dir, "test.txt"))
-    tokenizer_path = os.path.join((data_dir, "tokenizer.json"))
+    models_dir = os.path.join(out_dir, "models")
+    model_path = os.path.join(models_dir, "model.pt")
+    data_dir = os.path.join(out_dir, "datasets")
+    train_path = os.path.join(data_dir, "train.txt")
+    eval_path = os.path.join(data_dir, "eval.txt")
+    test_path = os.path.join(data_dir, "test.txt")
+    tokenizer_path = os.path.join(data_dir, "tokenizer.json")
 
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(models_dir, exist_ok=True)
