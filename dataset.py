@@ -44,11 +44,15 @@ def split_train_test_set(
     if line_count < batch_line_cnt:
         batch_line_cnt = line_count
 
-    dataset_dir = os.path.join(out_path, "datasets")
+    #dataset_dir = os.path.join(out_path, "datasets")
+    dataset_dir = out_path
     os.makedirs(dataset_dir, exist_ok=True)
-    train_out_fp = os.path.join(out_path, "datasets", "train.txt")
-    eval_out_fp = os.path.join(out_path, "datasets", "eval.txt")
-    test_out_fp = os.path.join(out_path, "datasets", "test.txt")
+    #train_out_fp = os.path.join(out_path, "datasets", "train.txt")
+    #eval_out_fp = os.path.join(out_path, "datasets", "eval.txt")
+    #test_out_fp = os.path.join(out_path, "datasets", "test.txt")
+    train_out_fp = os.path.join(out_path,  "train.txt")
+    eval_out_fp = os.path.join(out_path, "eval.txt")
+    test_out_fp = os.path.join(out_path, "test.txt")
 
     idxs = list(range(batch_line_cnt))
     random.shuffle(idxs)
@@ -172,8 +176,8 @@ class LazyLoader:
             label_id = cur_ids[idx]
             cur_ids[idx] = mask_id
             tgt_mask[random_elements[i + 1 :]] = 1
-            src_ids = [self.start_id] + ids + [self.end_id]
-            tgt_mask = torch.cat((0, tgt_mask, 0))
+            src_ids = [self.start_id] + cur_ids + [self.end_id]
+            tgt_mask = torch.cat((torch.tensor([0], dtype=torch.bool), tgt_mask, torch.tensor([0], dtype=torch.bool)))
             result_batch.append(
                 (
                     torch.tensor(src_ids, dtype=torch.long),
@@ -208,6 +212,7 @@ class LazyLoader:
     def collate_fn(self, batch):
         # batch is a list of (src_ids, tgt_ids) pairs (as torch Tensors of different lengths)
         src_batch, mask_batch, label_batch = zip(*batch)
+        label_batch = torch.tensor(label_batch, dtype=torch.long)
         src_lens = [len(x) for x in src_batch]
         max_src = max(src_lens)
         pad_id = self.tokenizer.token_to_id("<pad>")
