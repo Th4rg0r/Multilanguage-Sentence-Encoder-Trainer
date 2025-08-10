@@ -70,6 +70,7 @@ class Encoder(nn.Module):
         x = self.encoder(x, src_key_padding_mask=mask)
         return x
 
+
 class MissingFinder(nn.Module):
     def __init__(
         self,
@@ -82,13 +83,15 @@ class MissingFinder(nn.Module):
     ):
         super().__init__()
         self.encoder = Encoder(
-                        vocab_size=vocab_size,
-                        d_model = d_model,
-                        n_head = n_head,
-                        num_layers = num_layers,
-                        dim_feed_forward=dim_feed_forward,
-                        dropout=dropout)
+            vocab_size=vocab_size,
+            d_model=d_model,
+            n_head=n_head,
+            num_layers=num_layers,
+            dim_feed_forward=dim_feed_forward,
+            dropout=dropout,
+        )
         self.output_layer = nn.Linear(d_model, vocab_size)
+
     def forward(self, x, mask):
         x = self.encoder(x, mask)
         x = self.output_layer(x)

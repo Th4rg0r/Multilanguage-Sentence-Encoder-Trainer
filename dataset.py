@@ -44,13 +44,13 @@ def split_train_test_set(
     if line_count < batch_line_cnt:
         batch_line_cnt = line_count
 
-    #dataset_dir = os.path.join(out_path, "datasets")
+    # dataset_dir = os.path.join(out_path, "datasets")
     dataset_dir = out_path
     os.makedirs(dataset_dir, exist_ok=True)
-    #train_out_fp = os.path.join(out_path, "datasets", "train.txt")
-    #eval_out_fp = os.path.join(out_path, "datasets", "eval.txt")
-    #test_out_fp = os.path.join(out_path, "datasets", "test.txt")
-    train_out_fp = os.path.join(out_path,  "train.txt")
+    # train_out_fp = os.path.join(out_path, "datasets", "train.txt")
+    # eval_out_fp = os.path.join(out_path, "datasets", "eval.txt")
+    # test_out_fp = os.path.join(out_path, "datasets", "test.txt")
+    train_out_fp = os.path.join(out_path, "train.txt")
     eval_out_fp = os.path.join(out_path, "eval.txt")
     test_out_fp = os.path.join(out_path, "test.txt")
 
@@ -177,7 +177,13 @@ class LazyLoader:
             cur_ids[idx] = mask_id
             tgt_mask[random_elements[i + 1 :]] = 1
             src_ids = [self.start_id] + cur_ids + [self.end_id]
-            tgt_mask = torch.cat((torch.tensor([0], dtype=torch.bool), tgt_mask, torch.tensor([0], dtype=torch.bool)))
+            tgt_mask = torch.cat(
+                (
+                    torch.tensor([0], dtype=torch.bool),
+                    tgt_mask,
+                    torch.tensor([0], dtype=torch.bool),
+                )
+            )
             result_batch.append(
                 (
                     torch.tensor(src_ids, dtype=torch.long),
