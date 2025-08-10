@@ -318,6 +318,7 @@ def main():
     max_batches = args.max_batches
     max_eval_batches = args.max_eval_batches
     out_dir = os.path.join(project_dir, "out")
+    out_config_path = os.path.join(out_dir, "model.cfg")
     models_dir = os.path.join(project_dir, "models")
     model_path = os.path.join(models_dir, "model.pt")
     result_model_path = os.path.join(out_dir, "model.pt")
@@ -409,6 +410,8 @@ def main():
             if args.finetune:
                 # finetune model with a lesser learning rate
                 lr = lr/10;
+                with open(out_config_path, "w") as f:
+                    json.dump(params, f, indent=4)
 
         if args.finetune:
             lazy_finetune_train_loader = LazyLoader(
