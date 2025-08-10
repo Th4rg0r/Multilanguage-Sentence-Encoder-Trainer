@@ -315,6 +315,7 @@ def main():
     vocab_size = 35000
     batch_size = 32
     max_word_per_sentence = 10000
+    freeze_top_encoder_layer_ratio = 0.25
     max_batches = args.max_batches
     max_eval_batches = args.max_eval_batches
     out_dir = os.path.join(project_dir, "out")
@@ -440,7 +441,7 @@ def main():
                 dropout=dropout,
             )
 
-            
+             
             if os.path.exists(result_model_path):
                 print("reloading finetuned model")
                 model = model.encoder
@@ -453,6 +454,15 @@ def main():
                 model = model.encoder
                 
             model.to(device)
+            # Freeze the entire embedding layer
+            for param in model.embedding.parameters():
+                param.requires_grad = False
+
+            # You can tune this number.
+            num_layers_to_freeze = int(num_layers*freeze_top_encoder_layer_ratio)
+            for i in range(num_layers_to_freeze):
+                for param in model.encoder.layers[i].parameters():
+                    param.requires_grad = False
 
             best_loss = fine_tune_and_validate(
                 epochs=args.epochs,
