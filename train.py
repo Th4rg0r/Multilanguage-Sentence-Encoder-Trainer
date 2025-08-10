@@ -459,7 +459,7 @@ def main():
                 param.requires_grad = False
 
             # You can tune this number.
-            num_layers_to_freeze = int(num_layers*freeze_top_encoder_layer_ratio)
+            num_layers_to_freeze = int(math.ceil(gnum_layers*freeze_top_encoder_layer_ratio))
             for i in range(num_layers_to_freeze):
                 for param in model.encoder.layers[i].parameters():
                     param.requires_grad = False
