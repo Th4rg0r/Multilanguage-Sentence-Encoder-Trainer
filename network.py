@@ -2,6 +2,33 @@ import torch
 import torch.nn as nn
 import math
 
+def mean_pooling(model_output, attention_mask):
+    """
+    Performs mean pooling on the token embeddings, ignoring padding tokens.
+    
+    Args:
+        model_output (torch.Tensor): The output of the transformer model.
+                                     Shape: (batch_size, sequence_length, embedding_dim)
+        attention_mask (torch.Tensor) : The attention mask from the tokenizer.
+                                        Shape: (batch_size, sequence_length)
+    Returns:
+        torch.Tensor: The Sentence embeddings.
+                      Shape: (batch_size, embedding_dim)
+    """
+    # Expand the attention mask,  to match the shape of  the token embeddings
+    input_mask_expanded = attention_mask.unsqueeze(-1).expand(model_output.size()).float()
+
+    # sum the embeddings but only for non-padding tokens (where mask is  1)
+    sum_embeddings =  torch.sum(model_output * input_mask_expanded, dim=1)
+
+    # Sum the mask, to get the actual length of each sentence (ignoring padding)
+    # Add a small elipson (1e-9) to avoid division by zero for empty sequences
+    sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+
+    #Divide the sum of embeddings by the actual length to get the mean
+    return sum_embeddings / sum_mask
+    
+     
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_len=10000):

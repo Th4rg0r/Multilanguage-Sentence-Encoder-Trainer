@@ -18,10 +18,6 @@ import subprocess
 
 
 def get_file_line_cnt(fp):
-    # count file lines
-    # result = subprocess.run(["wc", "-l", fp], capture_output=True, text=True)
-    # line_count = result.stdout.strip().split()[0]
-    # return int(line_count)
     line_count = 0
     with open(fp, "r") as f:
         for line in f:
@@ -47,9 +43,6 @@ def split_train_test_set(
     # dataset_dir = os.path.join(out_path, "datasets")
     dataset_dir = out_path
     os.makedirs(dataset_dir, exist_ok=True)
-    # train_out_fp = os.path.join(out_path, "datasets", "train.txt")
-    # eval_out_fp = os.path.join(out_path, "datasets", "eval.txt")
-    # test_out_fp = os.path.join(out_path, "datasets", "test.txt")
     train_out_fp = os.path.join(out_path, "train.txt")
     eval_out_fp = os.path.join(out_path, "eval.txt")
     test_out_fp = os.path.join(out_path, "test.txt")
@@ -117,7 +110,7 @@ class ShuffleBuffer:
 
 
 class LazyLoader:
-    def __init__(self, tokenizer, file_path, batch_size, max_word_per_sentence):
+    def __init__(self, tokenizer, file_path, batch_size, max_word_per_sentence, contrastive_learning = False):
         self.file_path = file_path
         # self.tokenizer = Tokenizer.from_file(tokenizer_path)
         self.tokenizer = tokenizer
@@ -125,6 +118,7 @@ class LazyLoader:
         self.end_id = self.tokenizer.token_to_id("</s>")
         self.batch_size = batch_size
         self.max_word_per_sentence = max_word_per_sentence
+        self.contrastive_learning = contrastive_learning
 
     def stream_lines(self, fp):
         with open(fp, "r", encoding="utf-8") as f:
@@ -193,21 +187,29 @@ class LazyLoader:
             )
         return result_batch
 
+    def clr_transform_input(self, line):
+        enc = self.tokenizer.encode(line)
+        ids = enc.ids
+        src_ids = [self.start_id] + ids + [self.end_id]
+        return torch.tensor(src_ids, dtype=torch.long)
+
     def loader(self):
         # 1. Wrap line-stream
         buffered_stream = ShuffleBuffer(self.stream_lines(self.file_path), 2048)
-        # node = IterableWrapper(self.stream_lines(self.file_path))
         node = IterableWrapper(buffered_stream)
+
         # 2. apply paralell processing
 
         node = ParallelMapper(
             node,
-            map_fn=lambda l: self.transform_input(l),
+            map_fn=lambda l: self.clr_transform_input(l) if self.contrastive_learning else self.transform_input(l),
             num_workers=4,
             method="thread",
         )
-        node = Unbatcher(node)
-        # 3. group into batches
+        # 3. Unbatcher if not contrastive learning
+        if not self.contrastive_learning:
+            node = Unbatcher(node)
+        # 4. group into batches
         node = Batcher(node, batch_size=self.batch_size, drop_last=False)
 
         node = PinMemory(node)
@@ -216,18 +218,35 @@ class LazyLoader:
         return loader
 
     def collate_fn(self, batch):
-        # batch is a list of (src_ids, tgt_ids) pairs (as torch Tensors of different lengths)
-        src_batch, mask_batch, label_batch = zip(*batch)
-        label_batch = torch.tensor(label_batch, dtype=torch.long)
-        src_lens = [len(x) for x in src_batch]
-        max_src = max(src_lens)
-        pad_id = self.tokenizer.token_to_id("<pad>")
+        if not self.contrastive_learning:
+            # batch is a list of (src_ids, tgt_ids) pairs (as torch Tensors of different lengths)
+            src_batch, mask_batch, label_batch = zip(*batch)
+            label_batch = torch.tensor(label_batch, dtype=torch.long)
+            src_lens = [len(x) for x in src_batch]
+            max_src = max(src_lens)
+            pad_id = self.tokenizer.token_to_id("<pad>")
 
-        # Pad sequences and build masks
-        padded_src = torch.full((len(batch), max_src), pad_id, dtype=torch.long)
-        src_mask = torch.ones(len(batch), max_src, dtype=torch.bool)
-        for i, (src_ids, mask, label) in enumerate(batch):
-            padded_src[i, : len(src_ids)] = src_ids
-            src_mask[i, : len(src_ids)] = mask
-            # Transformer expects key_padding_mask where True means **not** allowed
-        return padded_src, src_mask, label_batch
+            # Pad sequences and build masks
+            padded_src = torch.full((len(batch), max_src), pad_id, dtype=torch.long)
+            src_mask = torch.ones(len(batch), max_src, dtype=torch.bool)
+            for i, (src_ids, mask, label) in enumerate(batch):
+                padded_src[i, : len(src_ids)] = src_ids
+                src_mask[i, : len(src_ids)] = mask
+                # Transformer expects key_padding_mask where True means **not** allowed
+            return padded_src, src_mask, label_batch
+        else:
+            # batch is a list of (src_ids, tgt_ids) pairs (as torch Tensors of different lengths)
+            src_batch = batch
+            src_lens = [len(x) for x in src_batch]
+            max_src = max(src_lens)
+            pad_id = self.tokenizer.token_to_id("<pad>")
+
+            # Pad sequences and build masks
+            padded_src = torch.full((len(batch), max_src), pad_id, dtype=torch.long)
+            src_mask = torch.ones(len(batch), max_src, dtype=torch.bool)
+            for i, src_ids in enumerate(batch):
+                padded_src[i, : len(src_ids)] = src_ids
+                src_mask[i, : len(src_ids)] = 0
+                # Transformer expects key_padding_mask where True means **not** allowed
+            return padded_src, src_mask
+            
