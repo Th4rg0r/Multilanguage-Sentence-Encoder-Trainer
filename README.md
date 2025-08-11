@@ -122,4 +122,72 @@ The `config.yaml` file is the central control panel for the entire project. Here
 
 The trained models are saved in the `models/` directory:
 -   `models/model.pt`: The base model from the pre-training step.
--   `models/model_finetuned.pt`: The final, fine-tuned model, ready for producing sentence embeddings.
+-   `models/model_finetuned.pt`: The weights of the fine-tuned encoder.
+
+## Using the Final Model for Inference
+
+The fully-wrapped, production-ready model is saved to `out/model.pt` after the fine-tuning process is complete. This model is easy to use as it directly outputs sentence embeddings.
+
+Here is an example of how to load the model and use it to encode sentences. You can save this as a separate Python script (e.g., `inference_example.py`):
+
+```python
+import torch
+from tokenizers import Tokenizer
+
+# --- 1. Define paths and check for model/tokenizer ---
+def get_sentence_embedding(sentences, model_path='out/model.pt', tokenizer_path='data/tokenizer.json'):
+    """
+    Loads the final model and tokenizer to generate embeddings for a list of sentences.
+    """
+    try:
+        # --- 2. Load the saved model and tokenizer ---
+        # Note: We use torch.load() on the model file directly because we saved the entire model object.
+        # We also specify map_location='cpu' to ensure it works on machines without a GPU.
+        model = torch.load(model_path, map_location=torch.device('cpu'))
+        tokenizer = Tokenizer.from_file(tokenizer_path)
+        print("Model and tokenizer loaded successfully.")
+
+    except FileNotFoundError:
+        print(f"Error: Model or tokenizer not found. Please ensure the paths are correct.")
+        print(f"Searched for model at: {model_path}")
+        print(f"Searched for tokenizer at: {tokenizer_path}")
+        return
+
+    # Set the model to evaluation mode
+    model.eval()
+
+    # --- 3. Tokenize the input sentences ---
+    # The tokenizer needs to pad the sentences to the same length for batch processing.
+    tokenizer.enable_padding(pad_id=tokenizer.token_to_id("<pad>"), pad_token="<pad>")
+    encoded_input = tokenizer.encode_batch(sentences)
+
+    # Convert tokenized inputs to PyTorch tensors
+    input_ids = torch.tensor([e.ids for e in encoded_input], dtype=torch.long)
+    attention_mask = torch.tensor([e.attention_mask for e in encoded_input], dtype=torch.long)
+
+    # --- 4. Generate embeddings ---
+    # We don't need to calculate gradients for inference.
+    with torch.no_grad():
+        embeddings = model(input_ids, attention_mask)
+
+    return embeddings
+
+if __name__ == '__main__':
+    # List of sentences you want to encode
+    my_sentences = [
+        "This is an example sentence.",
+        "Each sentence is converted to a vector.",
+        "This is a great way to represent text for machine learning."
+    ]
+
+    sentence_embeddings = get_sentence_embedding(my_sentences)
+
+    if sentence_embeddings is not None:
+        print("\n--- Results ---")
+        print(f"Shape of the embedding tensor: {sentence_embeddings.shape}")
+        print("(Batch Size, Embedding Dimension)")
+        
+        print("\nEmbedding for the first sentence:")
+        print(sentence_embeddings[0])
+```
+

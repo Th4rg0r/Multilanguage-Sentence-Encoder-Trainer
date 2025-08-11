@@ -12,7 +12,7 @@ from torch.nn.utils import clip_grad_norm_
 from tokenizers import Tokenizer
 from tokenizer import tokenize
 from dataset import LazyLoader, split_train_test_set
-from network import MissingFinder, Encoder, mean_pooling
+from network import MissingFinder, Encoder, mean_pooling, SentenceEncoder
 from info_nce_loss import InfoNCELoss
 
 # -------------------
@@ -325,6 +325,31 @@ def run_finetuning(config, start_from_scratch=False):
             best_eval_loss = avg_eval_loss
             print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving finetuned model to {finetuned_path}")
             torch.save(model.state_dict(), finetuned_path)
+    
+    # --- Save Final Production Model ---
+    print("\n--- Fine-tuning complete. Saving final production-ready model. ---")
+    # 1. Create a fresh encoder instance with the same architecture
+    final_encoder = Encoder(
+        vocab_size=tokenizer.get_vocab_size(),
+        embedding_dim=base_model_params['embedding_dim'],
+        num_attention_heads=base_model_params['num_attention_heads'],
+        num_encoder_layers=base_model_params['num_encoder_layers'],
+        feed_forward_dim=base_model_params['feed_forward_dim'],
+        dropout=base_model_params['dropout']
+    )
+    # 2. Load the best fine-tuned weights into it
+    best_weights = torch.load(finetuned_path)
+    final_encoder.load_state_dict(best_weights)
+
+    # 3. Create the final SentenceEncoder wrapper
+    production_model = SentenceEncoder(encoder=final_encoder)
+    production_model.eval() # Set to evaluation mode
+
+    # 4. Save the entire model object for easy use in other applications
+    final_model_path = os.path.join(data_cfg['project_dir'], config['final_model_path'])
+    print(f"Saving final model to: {final_model_path}")
+    torch.save(production_model, final_model_path)
+    print("Done.")
 
 
 

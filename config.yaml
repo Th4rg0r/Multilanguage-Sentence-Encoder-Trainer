@@ -11,10 +11,17 @@ data:
   max_word_per_sentence: 1000 # Sentences with more words than this will be skipped.
 
 # -------------------
+# Output Settings
+# -------------------
+# Defines the final output path for the production-ready model.
+final_model_path: out/model.pt
+
+# -------------------
 # Tokenizer Settings
 # -------------------
 # Configures the sentencepiece tokenizer.
 tokenizer:
+  save_path: data/tokenizer.json # Path to save the trained tokenizer file.
   vocab_size: 35000
   keep_punctuation: False     # If false, punctuation will be stripped from the text. Usually recommended.
   keep_accents: True          # If true, characters with accents (e.g., é, ö) are kept. If false, they are decomposed (e.g., 'é' -> 'e'). Recommended for non-English languages.

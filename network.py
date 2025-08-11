@@ -123,3 +123,22 @@ class MissingFinder(nn.Module):
         x = self.encoder(x, mask)
         x = self.output_layer(x)
         return x
+
+
+class SentenceEncoder(nn.Module):
+    """
+    A final, production-ready sentence encoder model.
+    Wraps a pre-trained Encoder and a pooling layer to directly output
+    a single sentence embedding.
+    """
+    def __init__(self, encoder: Encoder):
+        super().__init__()
+        self.encoder = encoder
+
+    def forward(self, input_ids, attention_mask):
+        """
+        Takes tokenized input and returns a single sentence embedding.
+        """
+        token_embeddings = self.encoder(input_ids, attention_mask)
+        sentence_embedding = mean_pooling(token_embeddings, attention_mask)
+        return sentence_embedding
