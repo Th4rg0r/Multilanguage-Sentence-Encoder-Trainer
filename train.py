@@ -152,6 +152,7 @@ def train_and_validate(
     save_model=False,
     model_path="./models/model.pt",
     ):
+    accumulation_steps = 4
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = MissingFinder(
         vocab_size=vocab_size,
@@ -207,10 +208,12 @@ def train_and_validate(
                 masked_indices = (src_batch == mask_id).nonzero(as_tuple=True)
                 masked_logits = outputs[masked_indices]
                 loss = criterion(masked_logits, labels_batch)
-                loss.backward()
-                clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-                epoch_loss += loss.item()
+                epoch_loss += loss.item() 
+                scaled_loss = loss / accumulation_steps
+                scaled_loss.backward()
+                if (idx + 1) % accumulation_steps  == 0:
+                    clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    optimizer.step()
                 bar.text("Loss: " + str(loss.item()))
                 bar()
         if not max_batches:
@@ -314,6 +317,8 @@ def main():
     project_dir = "."
     vocab_size = 35000
     batch_size = 32
+    batch_size_factor = 4
+    small_batch_size = 8
     max_word_per_sentence = 10000
     freeze_top_encoder_layer_ratio = 0.25
     max_batches = args.max_batches
@@ -347,21 +352,21 @@ def main():
         tokenizer = Tokenizer.from_file(tokenizer_path)
 
     if not max_batches:
-        max_batches = int(math.ceil(get_file_line_cnt(train_path)/batch_size))
+        max_batches = int(math.ceil(get_file_line_cnt(train_path)/small_batch_size))
     if not max_eval_batches:
-        max_eval_batches = int(math.ceil(get_file_line_cnt(eval_path)/batch_size))
+        max_eval_batches = int(math.ceil(get_file_line_cnt(eval_path)/small_batch_size))
 
     lazy_train_loader = LazyLoader(
         tokenizer=tokenizer,
         file_path=train_path,
-        batch_size=batch_size,
+        batch_size=small_batch_size,
         max_word_per_sentence=max_word_per_sentence,
     )
 
     lazy_eval_loader = LazyLoader(
         tokenizer=tokenizer,
         file_path=eval_path,
-        batch_size=batch_size,
+        batch_size=small_batch_size,
         max_word_per_sentence=max_word_per_sentence)
 
     storage_database_name = "my_study.db"
