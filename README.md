@@ -80,13 +80,15 @@ This will use Optuna to automatically find the best model configuration for your
 python train.py --optimize
 ```
 
-**Option B: Train with Default Parameters**
+**Option B: Train with a Specific Configuration**
 
-This will use the default parameters specified in `config.yaml` to pre-train the model.
+This will use a specific set of hyperparameters to pre-train the model.
 
 ```bash
 python train.py
 ```
+
+By default, the script will automatically load the **best hyperparameters** found by the last `--optimize` run. If you want to ignore the optimization results and use the specific parameters written in the `config.yaml` file, set `override_with_custom_params.enabled` to `true` in the `train` section of the config.
 
 **Step 4: Fine-tune the Model**
 
