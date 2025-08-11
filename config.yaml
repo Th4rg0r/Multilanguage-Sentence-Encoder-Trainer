@@ -30,6 +30,8 @@ optimize:
   study_name: "encoder-optimization-v1"
   max_train_batches_per_epoch: 1250 # Limits the number of training batches per epoch during optimization to speed up trials. Set to -1 for no limit.
   max_eval_batches_per_epoch: 250  # Limits the number of evaluation batches per epoch during optimization.
+  batch_size: 32            # Fixed batch size for all optimization trials.
+  accumulation_steps: 4     # Fixed number of gradient accumulation steps.
   
   # --- Search Space ---
   optimizer_name: # A list of optimizers for Optuna to choose from.
@@ -37,12 +39,12 @@ optimize:
     - RMSprop
     - SGD
   learning_rate: # The search range for the learning rate.
-    min: 1e-6
-    max: 1e-3
-  embedding_dim: # The model's embedding dimension. This is the size of the final sentence embedding. Larger values consume more VRAM.
-    min: 256
-    max: 512
-    step: 32
+    min: 1e-5
+    max: 5e-4
+  embedding_dim: # The model's embedding dimension. Using standard, proven sizes.
+    - 256
+    - 512
+    - 768
   num_attention_heads: # The number of attention heads. For every combination, embedding_dim must be divisible by num_attention_heads.
     - 4
     - 8
@@ -55,11 +57,9 @@ optimize:
     min: 512
     max: 2048
     step: 512
-  dropout: # The search range for the dropout rate.
-    min: 0.2
-    max: 0.5
-  batch_size: 32            # Fixed batch size for all optimization trials.
-  accumulation_steps: 4     # Fixed number of gradient accumulation steps.
+  dropout: # The search range for the dropout rate. 0.1 is a common baseline.
+    min: 0.1
+    max: 0.3
 
 # -------------------
 # Final Training Settings

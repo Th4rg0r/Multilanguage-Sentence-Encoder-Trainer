@@ -331,7 +331,99 @@ def run_finetuning(config, start_from_scratch=False):
 
 def run_optimization(config, start_new_study=False):
     """Main workflow for hyperparameter optimization with Optuna."""
-    # ... (implementation from previous step) ...
+    print("--- Starting Hyperparameter Optimization ---")
+    
+    # --- Configs ---
+    data_cfg = config['data']
+    tokenizer_cfg = config['tokenizer']
+    optimize_cfg = config['optimize']
+
+    # --- Storage & Study ---
+    storage_name = optimize_cfg['storage_name']
+    study_name = optimize_cfg['study_name']
+    if start_new_study:
+        try:
+            print(f"Starting new study. Deleting existing study '{study_name}' if it exists...")
+            optuna.delete_study(study_name=study_name, storage=storage_name)
+        except KeyError:
+            pass # Study does not exist
+    
+    study = optuna.create_study(
+        storage=storage_name,
+        study_name=study_name,
+        direction="minimize",
+        load_if_exists=True
+    )
+
+    # --- Load Tokenizer & Dataloaders ---
+    tokenizer = Tokenizer.from_file(os.path.join(data_cfg['project_dir'], tokenizer_cfg['save_path']))
+    train_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['train_path']), optimize_cfg['batch_size'], data_cfg['max_word_per_sentence'])
+    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['eval_path']), optimize_cfg['batch_size'], data_cfg['max_word_per_sentence'])
+
+    # --- Objective Function ---
+    def objective(trial):
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # --- Hyperparameter Search Space ---
+        optimizer_name = trial.suggest_categorical("optimizer_name", optimize_cfg['optimizer_name'])
+        learning_rate = trial.suggest_float("learning_rate", optimize_cfg['learning_rate']['min'], optimize_cfg['learning_rate']['max'], log=True)
+        embedding_dim = trial.suggest_categorical("embedding_dim", optimize_cfg['embedding_dim'])
+        
+        valid_heads = [h for h in optimize_cfg['num_attention_heads'] if embedding_dim % h == 0]
+        if not valid_heads:
+            raise optuna.exceptions.TrialPruned("No valid head number for this embedding_dim")
+        num_attention_heads = trial.suggest_categorical("num_attention_heads", valid_heads)
+
+        num_encoder_layers = trial.suggest_int("num_encoder_layers", optimize_cfg['num_encoder_layers']['min'], optimize_cfg['num_encoder_layers']['max'], step=optimize_cfg['num_encoder_layers']['step'])
+        feed_forward_dim = trial.suggest_int("feed_forward_dim", optimize_cfg['feed_forward_dim']['min'], optimize_cfg['feed_forward_dim']['max'], step=optimize_cfg['feed_forward_dim']['step'])
+        dropout = trial.suggest_float("dropout", optimize_cfg['dropout']['min'], optimize_cfg['dropout']['max'])
+
+        # --- Model, Optimizer, Criterion ---
+        model = MissingFinder(
+            vocab_size=tokenizer.get_vocab_size(),
+            embedding_dim=embedding_dim,
+            num_attention_heads=num_attention_heads,
+            num_encoder_layers=num_encoder_layers,
+            feed_forward_dim=feed_forward_dim,
+            dropout=dropout
+        )
+        model.tokenizer_mask_id = tokenizer.token_to_id("<mask>")
+        model.to(device)
+        
+        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
+        criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id("<pad>"))
+
+        # --- Training & Evaluation Loop for Trial ---
+        best_eval_loss = float('inf')
+        for epoch in range(optimize_cfg['epochs']):
+            print(f"\n(Trial {trial.number}) Epoch {epoch+1}/{optimize_cfg['epochs']}")
+            run_pretraining_epoch(model, train_loader.loader(), criterion, optimizer, device, {
+                'max_train_batches': optimize_cfg['max_train_batches_per_epoch'],
+                'accumulation_steps': optimize_cfg['accumulation_steps']
+            })
+            avg_eval_loss = evaluate(model, eval_loader.loader(), criterion, device, {
+                'max_eval_batches': optimize_cfg['max_eval_batches_per_epoch']
+            }, is_finetune_eval=False)
+            
+            trial.report(avg_eval_loss, epoch)
+            if avg_eval_loss < best_eval_loss:
+                best_eval_loss = avg_eval_loss
+            
+            if trial.should_prune():
+                raise optuna.exceptions.TrialPruned()
+        
+        return best_eval_loss
+
+    # --- Run Study ---
+    study.optimize(objective, n_trials=optimize_cfg['n_trials'], callbacks=[save_all_trials_callback])
+
+    print("\n--- Optimization Finished ---")
+    print(f"Best trial number: {study.best_trial.number}")
+    print(f"Best value (loss): {study.best_value}")
+    print("Best parameters:")
+    for key, value in study.best_params.items():
+        print(f"  {key}: {value}")
+
 
 # -------------------
 # Main Entry Point
