@@ -203,8 +203,15 @@ def run_training(config, start_from_scratch=False):
     else:
         print("Starting training from scratch.")
 
-    # --- Optimizer & Criterion ---
+    # --- Optimizer, Criterion & Scheduler ---
     optimizer = get_optimizer(model_params['optimizer_name'], model.parameters(), model_params['learning_rate'])
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, 
+        'min', 
+        factor=train_cfg['scheduler_factor'], 
+        patience=train_cfg['scheduler_patience'], 
+        verbose=True
+    )
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id("<pad>"))
 
     # --- Training Loop ---
@@ -216,6 +223,8 @@ def run_training(config, start_from_scratch=False):
         
         print(f"Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
+        scheduler.step(avg_eval_loss)
+
         if avg_eval_loss < best_eval_loss:
             best_eval_loss = avg_eval_loss
             print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving model to {model_save_path}")
@@ -224,6 +233,7 @@ def run_training(config, start_from_scratch=False):
             config_save_path = os.path.join(data_cfg['project_dir'], train_cfg['config_save_path'])
             with open(config_save_path, 'w') as f:
                 yaml.dump({'model_params': model_params}, f, indent=4)
+
 
 def run_finetuning(config, start_from_scratch=False):
     """Main workflow for fine-tuning the model with contrastive loss."""
@@ -270,7 +280,7 @@ def run_finetuning(config, start_from_scratch=False):
         print(f"Error: Pre-trained model not found at {pre_trained_path}. Please run pre-training first.")
         return
 
-    # We only fine-tune the encoder part of the MissingFinder
+    # We only fine-tune the encoder part
     model = model_to_load.encoder
     model.to(device)
 
@@ -285,11 +295,18 @@ def run_finetuning(config, start_from_scratch=False):
         for param in model.encoder.layers[i].parameters():
             param.requires_grad = False
 
-    # --- Optimizer & Criterion ---
+    # --- Optimizer, Criterion & Scheduler ---
     optimizer = get_optimizer(
         finetune_hyperparams['optimizer_name'], 
         filter(lambda p: p.requires_grad, model.parameters()),
         finetune_hyperparams['learning_rate']
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        'min',
+        factor=finetune_cfg['scheduler_factor'],
+        patience=finetune_cfg['scheduler_patience'],
+        verbose=True
     )
     criterion = InfoNCELoss(temperature=0.07)
 
@@ -302,10 +319,13 @@ def run_finetuning(config, start_from_scratch=False):
         
         print(f"Finetune Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
+        scheduler.step(avg_eval_loss)
+
         if avg_eval_loss < best_eval_loss:
             best_eval_loss = avg_eval_loss
             print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving finetuned model to {finetuned_path}")
             torch.save(model.state_dict(), finetuned_path)
+
 
 
 

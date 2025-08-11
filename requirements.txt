@@ -1,4 +1,6 @@
-alive_progress
-tokenizers
-torch
-torchdata
+alive_progress==3.3.0
+optuna==4.4.0
+PyYAML==6.0.2
+tokenizers==0.21.4
+torch==2.8.0
+torchdata==0.11.0
