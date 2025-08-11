@@ -120,25 +120,35 @@ The `config.yaml` file is the central control panel for the entire project. Here
 
 ## Final Output
 
-The trained models are saved in the `models/` directory:
--   `models/model.pt`: The base model from the pre-training step.
--   `models/model_finetuned.pt`: The weights of the fine-tuned encoder.
+-   **`models/`**: This directory contains intermediate model weights from the pre-training (`model.pt`) and fine-tuning (`model_finetuned.pt`) steps. These are useful for resuming training.
+-   **`out/`**: This directory contains the final, production-ready artifacts:
+    -   `model.pt`: A self-contained, easy-to-use `SentenceEncoder` model that directly outputs sentence embeddings.
+    -   `tokenizer.json`: The exact tokenizer that was trained and used with the final model.
 
 ## Using the Final Model for Inference
 
-The fully-wrapped, production-ready model is saved to `out/model.pt` after the fine-tuning process is complete. This model is easy to use as it directly outputs sentence embeddings.
+The fully-wrapped, production-ready model and its tokenizer are saved to the `out/` directory after the fine-tuning process is complete.
 
 Here is an example of how to load the model and use it to encode sentences. You can save this as a separate Python script (e.g., `inference_example.py`):
 
 ```python
 import torch
 from tokenizers import Tokenizer
+import os
 
 # --- 1. Define paths and check for model/tokenizer ---
-def get_sentence_embedding(sentences, model_path='out/model.pt', tokenizer_path='data/tokenizer.json'):
+def get_sentence_embedding(sentences, model_dir='out'):
     """
-    Loads the final model and tokenizer to generate embeddings for a list of sentences.
+    Loads the final model and tokenizer from the output directory to generate embeddings.
     """
+    model_path = os.path.join(model_dir, 'model.pt')
+    tokenizer_path = os.path.join(model_dir, 'tokenizer.json')
+
+    if not os.path.exists(model_path) or not os.path.exists(tokenizer_path):
+        print(f"Error: Model or tokenizer not found in '{model_dir}'.")
+        print("Please run the full training and fine-tuning pipeline first using 'python train.py --finetune'.")
+        return
+
     try:
         # --- 2. Load the saved model and tokenizer ---
         # Note: We use torch.load() on the model file directly because we saved the entire model object.
@@ -147,10 +157,8 @@ def get_sentence_embedding(sentences, model_path='out/model.pt', tokenizer_path=
         tokenizer = Tokenizer.from_file(tokenizer_path)
         print("Model and tokenizer loaded successfully.")
 
-    except FileNotFoundError:
-        print(f"Error: Model or tokenizer not found. Please ensure the paths are correct.")
-        print(f"Searched for model at: {model_path}")
-        print(f"Searched for tokenizer at: {tokenizer_path}")
+    except Exception as e:
+        print(f"An error occurred while loading the model or tokenizer: {e}")
         return
 
     # Set the model to evaluation mode

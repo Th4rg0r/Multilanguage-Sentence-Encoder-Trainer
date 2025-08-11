@@ -349,6 +349,12 @@ def run_finetuning(config, start_from_scratch=False):
     final_model_path = os.path.join(data_cfg['project_dir'], config['final_model_path'])
     print(f"Saving final model to: {final_model_path}")
     torch.save(production_model, final_model_path)
+
+    # 5. Save the tokenizer to the output directory for a self-contained package
+    dest_tokenizer_path = os.path.join(os.path.dirname(final_model_path), 'tokenizer.json')
+    print(f"Saving tokenizer to: {dest_tokenizer_path}")
+    tokenizer.save(dest_tokenizer_path)
+
     print("Done.")
 
 
@@ -494,7 +500,7 @@ def main():
     if args.optimize:
         run_optimization(config, start_new_study=args.new)
     elif args.finetune:
-        run_finetuning(config, start_from_scratch=args.new) # Note: --new for finetuning is not implemented yet
+        run_finetuning(config, start_from_scratch=args.new)
     else:
         run_training(config, start_from_scratch=args.new)
 
