@@ -89,7 +89,7 @@ class ShuffleBuffer:
 
 
 class LazyLoader:
-    def __init__(self, tokenizer, file_path, batch_size, max_word_per_sentence, contrastive_learning = False):
+    def __init__(self, tokenizer, file_path, batch_size, max_word_per_sentence, contrastive_learning = False, mask_ratio=0.15):
         self.file_path = file_path
         # self.tokenizer = Tokenizer.from_file(tokenizer_path)
         self.tokenizer = tokenizer
@@ -98,6 +98,7 @@ class LazyLoader:
         self.batch_size = batch_size
         self.max_word_per_sentence = max_word_per_sentence
         self.contrastive_learning = contrastive_learning
+        self.mask_ratio = mask_ratio
 
     def stream_lines(self, fp):
         with open(fp, "r", encoding="utf-8") as f:
@@ -129,42 +130,39 @@ class LazyLoader:
 
     def transform_input(self, line):
         enc = self.tokenizer.encode(line)
-        ids = enc.ids
+        token_ids = enc.ids
         mask_id = self.tokenizer.token_to_id("<mask>")
+        pad_id = self.tokenizer.token_to_id("<pad>")
 
-        ids_len = len(ids)
-        masked_count = int(ids_len * 0.22)
-
-        choosen_elements = random.sample(list(range(ids_len)), masked_count)
-        choosen_elements.sort()
-
-        random_elements = list(choosen_elements)
-        random.shuffle(random_elements)
-
-        result_batch = []
-
-        for i, idx in enumerate(random_elements):
-            cur_ids = list(ids)
-            tgt_mask = torch.zeros(len(cur_ids), dtype=torch.bool)
-            label_id = cur_ids[idx]
-            cur_ids[idx] = mask_id
-            tgt_mask[random_elements[i + 1 :]] = 1
-            src_ids = [self.start_id] + cur_ids + [self.end_id]
-            tgt_mask = torch.cat(
-                (
-                    torch.tensor([0], dtype=torch.bool),
-                    tgt_mask,
-                    torch.tensor([0], dtype=torch.bool),
-                )
-            )
-            result_batch.append(
-                (
-                    torch.tensor(src_ids, dtype=torch.long),
-                    tgt_mask,
-                    torch.tensor(label_id, dtype=torch.long),
-                )
-            )
-        return result_batch
+        n = len(token_ids)
+        num_predicted = max(1, int(round(n * self.mask_ratio)))
+        # Generate a random permutation of indices [0..n-1]
+        perm = torch.randperm(n).tolist()
+        # Take last num_predicted indices in the permutation as predicted positions
+        pred_positions = set(perm[-num_predicted:])
+        # Create labels: -100 for non-predicted tokens, original id for predicted
+        labels = torch.full((n,), pad_id, dtype=torch.long)
+        for idx in pred_positions:
+            labels[idx] = token_ids[idx]
+        # Create input with [MASK] tokens at predicted positions
+        masked_ids = []
+        for i, tok_id in enumerate(token_ids):
+            if i in pred_positions:
+                # 80% [MASK], 10% random token, 10% original (as in BERT)
+                rand = torch.rand(1).item()
+                if rand < 0.8:
+                    masked_ids.append(mask_id)
+                elif rand < 0.9:
+                    masked_ids.append(torch.randint(self.tokenizer.get_vocab_size(), (1,)).item())
+                else:
+                    masked_ids.append(tok_id)
+            else:
+                masked_ids.append(tok_id)
+        # Convert to tensors and add batch dim
+        input_ids = torch.tensor(masked_ids)# [ seq_len]
+        # Attention mask (1 for real tokens)
+        attention_mask = torch.ones_like(input_ids)
+        return input_ids, attention_mask, labels
 
     def clr_transform_input(self, line):
         enc = self.tokenizer.encode(line)
@@ -185,10 +183,7 @@ class LazyLoader:
             num_workers=4,
             method="thread",
         )
-        # 3. Unbatcher if not contrastive learning
-        if not self.contrastive_learning:
-            node = Unbatcher(node)
-        # 4. group into batches
+        # 3. group into batches
         node = Batcher(node, batch_size=self.batch_size, drop_last=False)
 
         node = PinMemory(node)
@@ -200,19 +195,21 @@ class LazyLoader:
         if not self.contrastive_learning:
             # batch is a list of (src_ids, tgt_ids) pairs (as torch Tensors of different lengths)
             src_batch, mask_batch, label_batch = zip(*batch)
-            label_batch = torch.tensor(label_batch, dtype=torch.long)
-            src_lens = [len(x) for x in src_batch]
+            src_lens = [x.size(-1) for x in src_batch]
             max_src = max(src_lens)
             pad_id = self.tokenizer.token_to_id("<pad>")
 
             # Pad sequences and build masks
             padded_src = torch.full((len(batch), max_src), pad_id, dtype=torch.long)
+            padded_label = torch.full((len(batch), max_src), pad_id, dtype=torch.long)
             src_mask = torch.ones(len(batch), max_src, dtype=torch.bool)
             for i, (src_ids, mask, label) in enumerate(batch):
-                padded_src[i, : len(src_ids)] = src_ids
-                src_mask[i, : len(src_ids)] = mask
+                padded_src[i, : src_ids.shape[0]] = src_ids
+                src_mask[i, : src_ids.shape[0]] = mask
+                padded_label[i, :src_ids.shape[0]] = label
                 # Transformer expects key_padding_mask where True means **not** allowed
-            return padded_src, src_mask, label_batch
+            src_mask = ~src_mask
+            return padded_src, src_mask, padded_label
         else:
             # batch is a list of (src_ids, tgt_ids) pairs (as torch Tensors of different lengths)
             src_batch = batch
@@ -227,5 +224,5 @@ class LazyLoader:
                 padded_src[i, : len(src_ids)] = src_ids
                 src_mask[i, : len(src_ids)] = 0
                 # Transformer expects key_padding_mask where True means **not** allowed
-            return padded_src, src_mask
+        return padded_src, src_mask
             
