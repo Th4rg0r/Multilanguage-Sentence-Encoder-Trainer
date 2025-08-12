@@ -349,7 +349,16 @@ def run_finetuning(config, start_from_scratch=False):
         factor=finetune_cfg['scheduler_factor'],
         patience=finetune_cfg['scheduler_patience'],
     )
-    criterion = InfoNCELoss(temperature=0.07)
+    loss_cfg = finetune_cfg['loss']
+    if loss_cfg['name'] == 'debiased_contrastive':
+        print("Using DebiasedContrastiveLoss")
+        criterion = DebiasedContrastiveLoss(
+            temperature=loss_cfg['temperature'],
+            p=loss_cfg['p']
+        )
+    else:
+        print("Using InfoNCELoss")
+        criterion = InfoNCELoss(temperature=loss_cfg['temperature'])
 
     # --- Fine-Tuning Loop ---
     best_eval_loss = float('inf')
