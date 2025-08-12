@@ -18,6 +18,7 @@ This project is built on a modern, state-of-the-art stack for NLP tasks, chosen 
 - **Hugging Face `tokenizers`**: We use this library to train a custom, fast, and efficient Byte-Pair Encoding (BPE) tokenizer directly on your data.
 - **Optuna**: A powerful, state-of-the-art hyperparameter optimization framework. It automates the tedious process of finding the best model architecture and learning parameters, using efficient sampling and pruning algorithms.
 - **YAML**: All configuration is managed through a single, human-readable `config.yaml` file, separating the logic of the code from the experimental parameters.
+- **Debiased Contrastive Loss**: In addition to the standard InfoNCE loss, this project supports Debiased Contrastive Loss. This advanced loss function accounts for sampling bias in contrastive learning, which can lead to more robust and higher-quality sentence embeddings, especially when dealing with datasets where false negatives might be a problem.
 
 ## Workflow Overview
 
@@ -27,7 +28,7 @@ The project supports a full end-to-end workflow:
 2.  **Tokenizer Training**: Trains a custom tokenizer on your data.
 3.  **Hyperparameter Optimization (Optional but Recommended)**: Uses Optuna to find the best model architecture (e.g., number of layers, embedding size) and training parameters for your specific dataset.
 4.  **Pre-training**: The model first learns the structure of the language using a Masked Language Modeling (MLM) objective.
-5.  **Fine-tuning**: The pre-trained model is then fine-tuned using a Contrastive Learning (InfoNCE loss) objective. This step is crucial for producing high-quality sentence embeddings that are well-suited for semantic similarity tasks.
+5.  **Fine-tuning**: The pre-trained model is then fine-tuned using a contrastive learning objective. This project supports both the standard **InfoNCE loss** and a more advanced **Debiased Contrastive Loss**. This step is crucial for producing high-quality sentence embeddings that are well-suited for semantic similarity tasks.
 
 ## Installation and Usage
 
