@@ -111,7 +111,7 @@ finetune:
   max_eval_batches: -1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
   freeze_layer_ratio: 0.25
   loss:
-    name: "info_nce" # "info_nce" or "debiased_contrastive"
+    name: "debiased_contrastive" # "info_nce" or "debiased_contrastive"
     temperature: 0.07
     p: 0.1 # Only used for debiased_contrastive
   model_save_path: models/model_finetuned.pt # Path to save the final fine-tuned model weights.
