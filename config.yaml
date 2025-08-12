@@ -5,10 +5,11 @@
 data:
   input_path: input.txt
   remove_duplicates: True     # If true, removes duplicate lines from the input file before splitting.
+  no_duplicates_path: data/no_duplicates.txt
   test_size: 0.1              # The proportion of the dataset to be held out for the test set.
   train_path: data/train.txt
   test_path: data/test.txt
-  max_word_per_sentence: 1000 # Sentences with more words than this will be skipped.
+  max_word_per_sentence: 128 # Sentences with more words than this will be skipped.
 
 # -------------------
 # Output Settings
@@ -31,8 +32,8 @@ tokenizer:
 # -------------------
 # Defines the search space and execution for the hyperparameter search.
 optimize:
-  epochs: 12
-  n_trials: 50                # Total number of Optuna trials to run for the hyperparameter search.
+  epochs: 15
+  n_trials: 100                # Total number of Optuna trials to run for the hyperparameter search.
   storage_name: "sqlite:///data/my_study.db"
   study_name: "encoder-optimization-v1"
   max_train_batches_per_epoch: 1250 # Limits the number of training batches per epoch during optimization to speed up trials. Set to -1 for no limit.
@@ -42,12 +43,12 @@ optimize:
   
   # --- Search Space ---
   optimizer_name: # A list of optimizers for Optuna to choose from.
+    - AdamW
     - Adam
     - RMSprop
-    - SGD
   learning_rate: # The search range for the learning rate.
-    min: 1e-5
-    max: 5e-4
+    min: 1e-6
+    max: 1e-4
   embedding_dim: # The model's embedding dimension. Using standard, proven sizes.
     - 256
     - 512
@@ -65,8 +66,8 @@ optimize:
     max: 2048
     step: 512
   dropout: # The search range for the dropout rate. 0.1 is a common baseline.
-    min: 0.1
-    max: 0.3
+    min: 0.05
+    max: 0.2
 
 # -------------------
 # Final Training Settings
@@ -104,7 +105,8 @@ finetune:
   epochs: 7
   # The ratio of BOTTOM layers to freeze during fine-tuning. 0.25 means the bottom 25% of layers will be frozen.
   # The embedding layer is always frozen in addition to this.
-  batch_size: 32            # Fixed batch size 
+  batch_size: 256            # Fixed batch size 
+  small_batch_size: 32
   max_train_batches: -1         # Limits the number of training batches per epoch. Set to -1 for no limit.
   max_eval_batches: -1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
   freeze_layer_ratio: 0.25
