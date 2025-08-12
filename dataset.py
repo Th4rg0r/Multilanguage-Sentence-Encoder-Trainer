@@ -25,64 +25,43 @@ def get_file_line_cnt(fp):
     return line_count
 
 
-def split_train_test_set(
-    file_path, out_path, train_ratio=0.8, validation_ratio=0.1, test_ratio=0.1
-):
-    print("split into three datasets: train, eval, test")
-    ratio_sum = train_ratio + validation_ratio + test_ratio
-    train_ratio = train_ratio / ratio_sum
-    validation_ratio = validation_ratio / ratio_sum
-    test_ratio = test_ratio / ratio_sum
-
-    batch_line_cnt = 10000
+def split_train_test_set(file_path, out_path, test_size=0.1):
+    """Splits a text file into a training and a test set."""
+    print("Splitting data into train and test sets...")
+    
     line_count = get_file_line_cnt(file_path)
+    if line_count == 0:
+        print("Input file is empty. Nothing to split.")
+        return 0, 0
 
-    if line_count < batch_line_cnt:
-        batch_line_cnt = line_count
-
-    # dataset_dir = os.path.join(out_path, "datasets")
-    dataset_dir = out_path
-    os.makedirs(dataset_dir, exist_ok=True)
     train_out_fp = os.path.join(out_path, "train.txt")
-    eval_out_fp = os.path.join(out_path, "eval.txt")
     test_out_fp = os.path.join(out_path, "test.txt")
 
-    idxs = list(range(batch_line_cnt))
-    random.shuffle(idxs)
-    tmp_idx = 0
-    batch_iteration = 0
+    indices = list(range(line_count))
+    random.shuffle(indices)
+    
+    split_idx = int(line_count * (1 - test_size))
+    train_indices = set(indices[:split_idx])
+
     train_cnt = 0
-    valid_cnt = 0
     test_cnt = 0
 
-    with alive_bar(line_count) as bar, open(file_path, "r") as f_input, open(
-        train_out_fp, "w"
-    ) as f_train, open(eval_out_fp, "w") as f_valid, open(test_out_fp, "w") as f_test:
-        valid_threshold = batch_line_cnt * train_ratio
-        test_threshold = batch_line_cnt * (validation_ratio + train_ratio)
-        for line in f_input:
-            cur_idx = idxs[tmp_idx]
-            if cur_idx < valid_threshold:
-                f_train.write(line + "\n")
+    with open(file_path, "r", encoding='utf-8', errors='ignore') as f_input, \
+         open(train_out_fp, "w", encoding='utf-8') as f_train, \
+         open(test_out_fp, "w", encoding='utf-8') as f_test, \
+         alive_bar(line_count) as bar:
+        
+        for i, line in enumerate(f_input):
+            if i in train_indices:
+                f_train.write(line)
                 train_cnt += 1
-            elif cur_idx < test_threshold:
-                f_valid.write(line + "\n")
-                valid_cnt += 1
             else:
-                f_test.write(line + "\n")
+                f_test.write(line)
                 test_cnt += 1
-            tmp_idx += 1
             bar()
-            if tmp_idx >= batch_line_cnt:
-                tmp_idx = 0
-                batch_iteration += 1
-                if (batch_iteration + 1) * batch_line_cnt > line_count:
-                    batch_line_cnt = line_count - batch_iteration * batch_line_cnt
-                    valid_threshold = batch_line_cnt * train_ratio
-                    test_threshold = batch_line_cnt * validation_ratio
-                    idxs = idxs[:batch_line_cnt]
-                random.shuffle(idxs)
-    return train_cnt, valid_cnt, test_cnt, train_out_fp, eval_out_fp, test_out_fp
+            
+    print(f"Splitting complete. Train lines: {train_cnt}, Test lines: {test_cnt}")
+    return train_cnt, test_cnt
 
 
 class ShuffleBuffer:

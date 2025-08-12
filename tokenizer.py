@@ -1,6 +1,4 @@
-from tokenizers import Tokenizer, models, pre_tokenizers, trainers, normalizers
-import re
-
+from tokenizers import Tokenizer, models, pre_tokenizers, trainers, normalizers, Regex
 
 def sentence_splitter(input_file, output_file):
     pattern = r"(?<=[。！？\.!?…！？؟।:;])\s+"
@@ -11,50 +9,56 @@ def sentence_splitter(input_file, output_file):
         for sentence in sentences:
             f.write(sentence + "\n")
 
-
-def tokenize(text_file, vocab_size, keep_accents=True):
+def tokenize(text_file, config):
     """
-    creates a tokenizer from a text_file and vocab_size as input
-
-    does not normalize Accents by default
-    if you want to normalize accents set "keep_accents" to False
-    maybe useful for languages like english: makes "Ápplé" to "apple"
+    Creates a tokenizer from a text file and configuration.
 
     Args:
-        text_file (String): the text file name including all the text for the vocabulary
-                            - ideal case is one sentence per line - makes better tokenizer but is not a neccessity
-        vocab_size (int): the target vocabulary size
+        text_file (str): The path to the text file for training the tokenizer.
+        config (dict): A dictionary containing tokenizer settings.
 
     Returns:
-       Tokenizer: the tokenizer create by the vocab
+        Tokenizer: The trained tokenizer.
     """
-    # use byte-pair encoding to shrink vocab size
+    keep_accents = config.get("keep_accents", True)
+    vocab_size = config["vocab_size"]
+    keep_punctuation = config.get("keep_punctuation", False)
+
+    # Use Byte-Pair Encoding (BPE)
     tokenizer = Tokenizer(models.BPE(unk_token="<unk>"))
-    if keep_accents:
-        # normalize everything to lower-case
-        tokenizer.normalizer = normalizers.Sequence(
-            [
-                normalizers.Lowercase(),
-            ]
-        )
-    else:
-        # normalizes to lowercase - also strip accents : é to e
-        tokenizer.normalizer = normalizers.Sequence(
-            [normalizers.NFD(), normalizers.Lowercase(), normalizers.StripAccents()]
-        )
 
-    tokenizer.pre_tokenizer = pre_tokenizers.Sequence(
-        [
-            # split by whytespace, also split and generate tokens for ".", "-", "@", even if they are adjacent to words
+    # Build the normalizer sequence based on the configuration
+    normalizer_list = []
+    if not keep_punctuation:
+        # If false, add a normalizer to replace punctuation with an empty string.
+        # The \p{P} pattern matches any kind of punctuation character.
+        normalizer_list.append(normalizers.Replace(Regex(r'\p{P}'), ''))
+    
+    # Always apply lowercasing
+    normalizer_list.append(normalizers.Lowercase())
+
+    if not keep_accents:
+        # If false, add normalizers to decompose and strip accents (e.g., 'é' -> 'e').
+        normalizer_list.extend([normalizers.NFD(), normalizers.StripAccents()])
+    
+    tokenizer.normalizer = normalizers.Sequence(normalizer_list)
+
+    # The pre_tokenizer splits the text into initial words.
+    if keep_punctuation:
+        # If we keep punctuation, we treat it as its own token (e.g., "Hello," -> "Hello" , ",").
+        tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
             pre_tokenizers.Whitespace(),
-            # make punktuations their own tokens "?!" becomes "?","!"
             pre_tokenizers.Punctuation(),
-        ]
-    )
+        ])
+    else:
+        # If punctuation is already stripped by the normalizer, we only need to split by whitespace.
+        tokenizer.pre_tokenizer = pre_tokenizers.Whitespace()
 
-    # special tokens: padding, unknown, start of sequence, end of sequence
+    # Define the trainer with the vocabulary size and special tokens
     special_tokens = ["<mask>", "<pad>", "<unk>", "<s>", "</s>"]
     trainer = trainers.BpeTrainer(vocab_size=vocab_size, special_tokens=special_tokens)
-    # train the tokenizer
+    
+    # Train the tokenizer on the input file
     tokenizer.train([text_file], trainer)
+    
     return tokenizer

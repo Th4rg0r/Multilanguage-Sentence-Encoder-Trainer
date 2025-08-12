@@ -1,0 +1,121 @@
+# -------------------
+# Data Settings
+# -------------------
+# Defines the source data and how it should be processed.
+data:
+  input_path: input.txt
+  remove_duplicates: True     # If true, removes duplicate lines from the input file before splitting.
+  test_size: 0.1              # The proportion of the dataset to be held out for the test set.
+  train_path: data/train.txt
+  test_path: data/test.txt
+  max_word_per_sentence: 1000 # Sentences with more words than this will be skipped.
+
+# -------------------
+# Output Settings
+# -------------------
+# Defines the final output path for the production-ready model.
+final_model_path: out/model.pt
+
+# -------------------
+# Tokenizer Settings
+# -------------------
+# Configures the sentencepiece tokenizer.
+tokenizer:
+  save_path: data/tokenizer.json # Path to save the trained tokenizer file.
+  vocab_size: 35000
+  keep_punctuation: False     # If false, punctuation will be stripped from the text. Usually recommended.
+  keep_accents: True          # If true, characters with accents (e.g., é, ö) are kept. If false, they are decomposed (e.g., 'é' -> 'e'). Recommended for non-English languages.
+
+# -------------------
+# Hyperparameter Optimization Settings (Optuna)
+# -------------------
+# Defines the search space and execution for the hyperparameter search.
+optimize:
+  epochs: 1
+  n_trials: 20                # Total number of Optuna trials to run for the hyperparameter search.
+  storage_name: "sqlite:///data/my_study.db"
+  study_name: "encoder-optimization-v1"
+  max_train_batches_per_epoch: 1 # Limits the number of training batches per epoch during optimization to speed up trials. Set to -1 for no limit.
+  max_eval_batches_per_epoch: 1  # Limits the number of evaluation batches per epoch during optimization.
+  batch_size: 32            # Fixed batch size for all optimization trials.
+  accumulation_steps: 4     # Fixed number of gradient accumulation steps.
+  
+  # --- Search Space ---
+  optimizer_name: # A list of optimizers for Optuna to choose from.
+    - Adam
+    - RMSprop
+    - SGD
+  learning_rate: # The search range for the learning rate.
+    min: 1e-5
+    max: 5e-4
+  embedding_dim: # The model's embedding dimension. Using standard, proven sizes.
+    - 256
+    - 512
+    - 768
+  num_attention_heads: # The number of attention heads. For every combination, embedding_dim must be divisible by num_attention_heads.
+    - 4
+    - 8
+    - 16
+  num_encoder_layers: # The number of layers in the Transformer encoder. More layers increase model size and computation time.
+    min: 4
+    max: 8
+    step: 2
+  feed_forward_dim: # The dimension of the feed-forward network inside the Transformer.
+    min: 512
+    max: 2048
+    step: 512
+  dropout: # The search range for the dropout rate. 0.1 is a common baseline.
+    min: 0.1
+    max: 0.3
+
+# -------------------
+# Final Training Settings
+# -------------------
+# Settings for training the model with a fixed set of hyperparameters.
+train:
+  epochs: 1
+  batch_size: 32
+  # Performs gradient accumulation. The effective batch size will be `batch_size * accumulation_steps`.
+  # This allows for larger effective batch sizes without increasing memory usage.
+  # `batch_size` must be a multiple of this value.
+  accumulation_steps: 4
+  max_train_batches: 1         # Limits the number of training batches per epoch. Set to -1 for no limit.
+  max_eval_batches: 1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
+  model_save_path: models/model.pt # Path to save the final trained model weights.
+  config_save_path: models/model.cfg # Path to save the configuration of the final trained model.
+  scheduler_patience: 2           # Scheduler: Number of epochs with no improvement after which learning rate will be reduced.
+  scheduler_factor: 0.5           # Scheduler: Factor by which the learning rate will be reduced. new_lr = lr * factor.
+  
+  override_with_custom_params:
+    enabled: False              # If true, the training process will use the parameters defined below instead of the best ones found by Optuna.
+    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "RMSprop", "SGD"
+    embedding_dim: 512          # The model's embedding dimension.
+    num_attention_heads: 8      # The number of attention heads.
+    num_encoder_layers: 6       # The number of layers in the Transformer encoder.
+    feed_forward_dim: 2048      # The dimension of the feed-forward network.
+    dropout: 0.15               # The dropout rate.
+    learning_rate: 1e-5         # The learning rate.
+
+# -------------------
+# Fine-Tuning Settings
+# -------------------
+# Settings for fine-tuning a pre-trained model.
+finetune:
+  epochs: 1
+  # The ratio of BOTTOM layers to freeze during fine-tuning. 0.25 means the bottom 25% of layers will be frozen.
+  # The embedding layer is always frozen in addition to this.
+  batch_size: 32            # Fixed batch size 
+  max_train_batches: 1         # Limits the number of training batches per epoch. Set to -1 for no limit.
+  max_eval_batches: 1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
+  freeze_layer_ratio: 0.25
+  model_save_path: models/model_finetuned.pt # Path to save the final fine-tuned model weights.
+  scheduler_patience: 1           # Scheduler: Number of epochs with no improvement after which learning rate will be reduced.
+  scheduler_factor: 0.5           # Scheduler: Factor by which the learning rate will be reduced. new_lr = lr * factor.
+  
+  override_with_custom_params:
+    # If true, fine-tuning will use the parameters below instead of the best ones found by Optuna.
+    # A pre-trained model is required to start fine-tuning.
+    enabled: False
+    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "RMSprop", "SGD"
+    dropout: 0.15               # The dropout rate.
+    learning_rate: 1e-5         # The learning rate.

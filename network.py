@@ -31,22 +31,22 @@ def mean_pooling(model_output, attention_mask):
      
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_len=10000):
+    def __init__(self, embedding_dim, max_len=10000):
         super(PositionalEncoding, self).__init__()
 
         # Init matrix
-        pe = torch.zeros(max_len, d_model)
+        pe = torch.zeros(max_len, embedding_dim)
         position = torch.arange(0, max_len, dtype=torch.float32).unsqueeze(1)
 
         # calc sinosudial values
         div_term = torch.exp(
-            torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)
+            torch.arange(0, embedding_dim, 2).float() * (-math.log(10000.0) / embedding_dim)
         )
 
         # Apply sine to even indices and cosine to odd indices
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0)  # shape (1, max_len, d_model)
+        pe = pe.unsqueeze(0)  # shape (1, max_len, embedding_dim)
 
         # Add batch dimension
         self.register_buffer("pe", pe)
@@ -61,33 +61,33 @@ class Encoder(nn.Module):
     def __init__(
         self,
         vocab_size,
-        d_model=512,
-        n_head=8,
-        num_layers=6,
-        dim_feed_forward=2048,
+        embedding_dim=512,
+        num_attention_heads=8,
+        num_encoder_layers=6,
+        feed_forward_dim=2048,
         dropout=0.15,
     ):
         super().__init__()
         self.vocab_size = vocab_size
-        self.d_model = d_model
-        self.n_head = n_head
-        self.num_layers = num_layers
-        self.dim_feed_forward = 2048
+        self.embedding_dim = embedding_dim
+        self.num_attention_heads = num_attention_heads
+        self.num_encoder_layers = num_encoder_layers
+        self.feed_forward_dim = 2048
         self.dropout = dropout
 
-        self.embedding = nn.Embedding(self.vocab_size, self.d_model)
-        self.pos_encoder = PositionalEncoding(self.d_model)
+        self.embedding = nn.Embedding(self.vocab_size, self.embedding_dim)
+        self.pos_encoder = PositionalEncoding(self.embedding_dim)
         self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.d_model,
-            nhead=self.n_head,
-            dim_feedforward=self.dim_feed_forward,
+            d_model=self.embedding_dim,
+            nhead=self.num_attention_heads,
+            dim_feedforward=self.feed_forward_dim,
             dropout=self.dropout,
             batch_first=True,
         )
-        self.layer_norm = nn.LayerNorm(normalized_shape=d_model)
+        self.layer_norm = nn.LayerNorm(normalized_shape=embedding_dim)
         self.encoder = nn.TransformerEncoder(
             encoder_layer=self.encoder_layer,
-            num_layers=self.num_layers,
+            num_layers=self.num_encoder_layers,
             norm=self.layer_norm,
         )
 
@@ -102,24 +102,43 @@ class MissingFinder(nn.Module):
     def __init__(
         self,
         vocab_size,
-        d_model=512,
-        n_head=8,
-        num_layers=6,
-        dim_feed_forward=2048,
+        embedding_dim=512,
+        num_attention_heads=8,
+        num_encoder_layers=6,
+        feed_forward_dim=2048,
         dropout=0.15,
     ):
         super().__init__()
         self.encoder = Encoder(
             vocab_size=vocab_size,
-            d_model=d_model,
-            n_head=n_head,
-            num_layers=num_layers,
-            dim_feed_forward=dim_feed_forward,
+            embedding_dim=embedding_dim,
+            num_attention_heads=num_attention_heads,
+            num_encoder_layers=num_encoder_layers,
+            feed_forward_dim=feed_forward_dim,
             dropout=dropout,
         )
-        self.output_layer = nn.Linear(d_model, vocab_size)
+        self.output_layer = nn.Linear(embedding_dim, vocab_size)
 
     def forward(self, x, mask):
         x = self.encoder(x, mask)
         x = self.output_layer(x)
         return x
+
+
+class SentenceEncoder(nn.Module):
+    """
+    A final, production-ready sentence encoder model.
+    Wraps a pre-trained Encoder and a pooling layer to directly output
+    a single sentence embedding.
+    """
+    def __init__(self, encoder: Encoder):
+        super().__init__()
+        self.encoder = encoder
+
+    def forward(self, input_ids, attention_mask):
+        """
+        Takes tokenized input and returns a single sentence embedding.
+        """
+        token_embeddings = self.encoder(input_ids, attention_mask)
+        sentence_embedding = mean_pooling(token_embeddings, attention_mask)
+        return sentence_embedding
