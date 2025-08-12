@@ -153,7 +153,7 @@ def get_sentence_embedding(sentences, model_dir='out'):
         # --- 2. Load the saved model and tokenizer ---
         # Note: We use torch.load() on the model file directly because we saved the entire model object.
         # We also specify map_location='cpu' to ensure it works on machines without a GPU.
-        model = torch.load(model_path, map_location=torch.device('cpu'))
+        model = torch.load(model_path, map_location=torch.device('cpu'), weights_only=False)
         tokenizer = Tokenizer.from_file(tokenizer_path)
         print("Model and tokenizer loaded successfully.")
 
@@ -171,7 +171,7 @@ def get_sentence_embedding(sentences, model_dir='out'):
 
     # Convert tokenized inputs to PyTorch tensors
     input_ids = torch.tensor([e.ids for e in encoded_input], dtype=torch.long)
-    attention_mask = torch.tensor([e.attention_mask for e in encoded_input], dtype=torch.long)
+    attention_mask = torch.tensor([e.attention_mask for e in encoded_input], dtype=torch.bool)
 
     # --- 4. Generate embeddings ---
     # We don't need to calculate gradients for inference.
