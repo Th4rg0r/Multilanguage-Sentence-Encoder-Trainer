@@ -36,6 +36,8 @@ def get_optimizer(optimizer_name, parameters, lr):
     """Creates an optimizer instance from a name string."""
     if optimizer_name == "Adam":
         return torch.optim.Adam(parameters, lr=lr)
+    if optimizer_name == "AdamW":
+        return torch.optim.AdamW(parameters, lr=lr)
     elif optimizer_name == "RMSprop":
         return torch.optim.RMSprop(parameters, lr=lr)
     elif optimizer_name == "SGD":
@@ -87,6 +89,13 @@ def run_finetuning_epoch(model, loader,collate_fn,  criterion, optimizer, device
     total_loss = 0
     max_batches = config.get('max_train_batches', -1)
     
+    large_batch_size = config.get('batch_size')
+    small_batch_size = config.get('small_batch_size')
+    accumulation_steps = large_batch_size // small_batch_size
+    
+    z_i_list = []
+    z_j_list = []
+    
     with alive_bar(max_batches if max_batches != -1 else None) as bar:
         for i, batch in enumerate(loader):
             if max_batches != -1 and i >= max_batches:
@@ -94,25 +103,36 @@ def run_finetuning_epoch(model, loader,collate_fn,  criterion, optimizer, device
             
             src_batch, mask_batch = collate_fn(batch)
             src_batch, mask_batch = src_batch.to(device), mask_batch.to(device)
-            optimizer.zero_grad()
 
             z_i_tokens = model(src_batch, mask_batch)
             z_j_tokens = model(src_batch, mask_batch)
 
             z_i = mean_pooling(z_i_tokens, mask_batch)
             z_j = mean_pooling(z_j_tokens, mask_batch)
+            
+            z_i_list.append(z_i)
+            z_j_list.append(z_j)
 
-            loss = criterion(z_i, z_j)
-            total_loss += loss.item()
+            if (i + 1) % accumulation_steps == 0:
+                z_i_acc = torch.cat(z_i_list, dim=0)
+                z_j_acc = torch.cat(z_j_list, dim=0)
+                
+                loss = criterion(z_i_acc, z_j_acc)
+                total_loss += loss.item()
+                
+                loss.backward()
+                clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                optimizer.zero_grad()
+                
+                z_i_list = []
+                z_j_list = []
+                
+                bar.text(f"Loss: {loss.item():.4f}")
             
-            loss.backward()
-            clip_grad_norm_(model.parameters(), max_norm=1.0)
-            optimizer.step()
-            
-            bar.text(f"Loss: {loss.item():.4f}")
             bar()
             
-    return total_loss / (i + 1)
+    return total_loss / (i / accumulation_steps)
 
 def evaluate(model, loader, collate_fn, criterion, device, config, is_finetune_eval):
     """Evaluates the model on the evaluation set."""
@@ -259,8 +279,8 @@ def run_finetuning(config, start_from_scratch=False):
 
     # --- Load Tokenizer & Dataloaders ---
     tokenizer = Tokenizer.from_file(os.path.join(data_cfg['project_dir'], tokenizer_cfg['save_path']))
-    train_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['train_path']), finetune_cfg['batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
-    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['test_path']), finetune_cfg['batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
+    train_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['train_path']), finetune_cfg['small_batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
+    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['test_path']), finetune_cfg['small_batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
 
     # --- Model Instantiation ---
     model_to_load = MissingFinder(
@@ -361,8 +381,6 @@ def run_finetuning(config, start_from_scratch=False):
     tokenizer.save(dest_tokenizer_path)
 
     print("Done.")
-
-
 
 
 def run_optimization(config, start_new_study=False):
