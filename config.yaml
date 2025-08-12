@@ -105,8 +105,8 @@ finetune:
   # The ratio of BOTTOM layers to freeze during fine-tuning. 0.25 means the bottom 25% of layers will be frozen.
   # The embedding layer is always frozen in addition to this.
   batch_size: 32            # Fixed batch size 
-  max_train_batches: 1         # Limits the number of training batches per epoch. Set to -1 for no limit.
-  max_eval_batches: 1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
+  max_train_batches: -1         # Limits the number of training batches per epoch. Set to -1 for no limit.
+  max_eval_batches: -1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
   freeze_layer_ratio: 0.25
   model_save_path: models/model_finetuned.pt # Path to save the final fine-tuned model weights.
   scheduler_patience: 1           # Scheduler: Number of epochs with no improvement after which learning rate will be reduced.
