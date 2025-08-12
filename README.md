@@ -71,31 +71,34 @@ python train.py --setup_tokenizer
 
 **Step 3: Train the Model**
 
-You have two options:
+The training process happens in three stages.
 
-**Option A: Find the Best Hyperparameters (Recommended)**
+**Step 3a: Find the Best Hyperparameters (Optional but Recommended)**
 
-This will use Optuna to automatically find the best model configuration for your data. This can take a long time, but typically yields the best results.
+This first step uses Optuna to automatically find the best model configuration for your data. This can take a long time, but typically yields the best results.
 
 ```bash
+# This will run the optimization process
 python train.py --optimize
 ```
 
-**Option B: Train with a Specific Configuration**
+**Step 3b: Pre-train the Model**
 
-This will use a specific set of hyperparameters to pre-train the model.
+Once the optimization is complete (or if you choose to skip it), you pre-train the model.
 
 ```bash
+# This will pre-train the model
 python train.py
 ```
 
-By default, the script will automatically load the **best hyperparameters** found by the last `--optimize` run. If you want to ignore the optimization results and use the specific parameters written in the `config.yaml` file, set `override_with_custom_params.enabled` to `true` in the `train` section of the config.
+By default, this command will automatically load the **best hyperparameters** found by the `--optimize` run. If you want to skip the optimization step and use the specific parameters defined in `config.yaml`, set `override_with_custom_params.enabled` to `true` in the `train` section of the config.
 
-**Step 4: Fine-tune the Model**
+**Step 3c: Fine-tune the Model**
 
-After the pre-training stage is complete, you must fine-tune the model to produce high-quality sentence embeddings.
+After the pre-training stage is complete, you must fine-tune the model to produce high-quality sentence embeddings. This step is crucial for performance on downstream tasks.
 
 ```bash
+# This will fine-tune the pre-trained model
 python train.py --finetune
 ```
 
