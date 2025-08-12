@@ -281,7 +281,8 @@ def run_finetuning(config, start_from_scratch=False):
     eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['test_path']), finetune_cfg['small_batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
 
     # --- Model Instantiation ---
-    model_to_load = MissingFinder(
+    model_to_load = None
+    MissingFinder(
         vocab_size=tokenizer.get_vocab_size(),
         embedding_dim=base_model_params['embedding_dim'],
         num_attention_heads=base_model_params['num_attention_heads'],
@@ -293,19 +294,36 @@ def run_finetuning(config, start_from_scratch=False):
     pre_trained_path = os.path.join(data_cfg['project_dir'], train_cfg['model_save_path'])
     finetuned_path = os.path.join(data_cfg['project_dir'], finetune_cfg['model_save_path'])
 
+    model = None
     # --- Model Loading Logic for --new flag ---
     if not start_from_scratch and os.path.exists(finetuned_path):
         print(f"Resuming fine-tuning from previously fine-tuned model: {finetuned_path}")
-        model_to_load.load_state_dict(torch.load(finetuned_path))
+        model = Encoder(
+            vocab_size=tokenizer.get_vocab_size(),
+            embedding_dim=base_model_params['embedding_dim'],
+            num_attention_heads=base_model_params['num_attention_heads'],
+            num_encoder_layers=base_model_params['num_encoder_layers'],
+            feed_forward_dim=base_model_params['feed_forward_dim'],
+            dropout=base_model_params['dropout']
+        )
+        model.load_state_dict(torch.load(finetuned_path))
     elif os.path.exists(pre_trained_path):
         print(f"Starting new fine-tuning session from pre-trained model: {pre_trained_path}")
+        model_to_load = MissingFinder(
+            vocab_size=tokenizer.get_vocab_size(),
+            embedding_dim=base_model_params['embedding_dim'],
+            num_attention_heads=base_model_params['num_attention_heads'],
+            num_encoder_layers=base_model_params['num_encoder_layers'],
+            feed_forward_dim=base_model_params['feed_forward_dim'],
+            dropout=base_model_params['dropout']
+        )
         model_to_load.load_state_dict(torch.load(pre_trained_path))
+        model = model_to_load.encoder
     else:
         print(f"Error: Pre-trained model not found at {pre_trained_path}. Please run pre-training first.")
         return
 
     # We only fine-tune the encoder part
-    model = model_to_load.encoder
     model.to(device)
 
     # --- Freeze Layers ---
