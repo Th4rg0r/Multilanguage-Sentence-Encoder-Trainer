@@ -194,7 +194,6 @@ def run_training(config, start_from_scratch=False):
     """Main workflow for pre-training the model."""
     print("--- Starting Model Pre-Training ---")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
     
     # --- Configs ---
     data_cfg = config['data']
@@ -264,7 +263,6 @@ def run_finetuning(config, start_from_scratch=False):
     """Main workflow for fine-tuning the model with contrastive loss."""
     print("--- Starting Model Fine-Tuning ---")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
 
     # --- Configs ---
     data_cfg = config['data']
@@ -312,7 +310,7 @@ def run_finetuning(config, start_from_scratch=False):
 
     # --- Freeze Layers ---
     num_layers = len(model.encoder.layers)
-    num_layers_to_freeze = int(num_layers * finetune_cfg['freeze_layer_ratio'])
+    num_layers_to_freeze = int(math.ceil(num_layers * finetune_cfg['freeze_layer_ratio']))
     print(f"Freezing the bottom {num_layers_to_freeze} out of {num_layers} encoder layers.")
     
     for param in model.embedding.parameters():
@@ -386,7 +384,6 @@ def run_finetuning(config, start_from_scratch=False):
 def run_optimization(config, start_new_study=False):
     """Main workflow for hyperparameter optimization with Optuna."""
     print("--- Starting Hyperparameter Optimization ---")
-    device = torch.device("cpu")
     
     # --- Configs ---
     data_cfg = config['data']
@@ -419,12 +416,10 @@ def run_optimization(config, start_new_study=False):
     # --- Objective Function ---
     def objective(trial):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        device = torch.device("cpu")
         
         # --- Hyperparameter Search Space ---
         optimizer_name = trial.suggest_categorical("optimizer_name", optimize_cfg['optimizer_name'])
         
-        print(f"lr:{type(optimize_cfg['learning_rate']['min'])}")
         learning_rate = trial.suggest_float("learning_rate", float(optimize_cfg['learning_rate']['min']), float(optimize_cfg['learning_rate']['max']), log=True)
         embedding_dim = trial.suggest_categorical("embedding_dim", optimize_cfg['embedding_dim'])
         
