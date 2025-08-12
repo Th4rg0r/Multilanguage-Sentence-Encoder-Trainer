@@ -156,8 +156,12 @@ def evaluate(model, loader, collate_fn, criterion, device, config, is_finetune_e
             src_batch, mask_batch = src_batch.to(device), mask_batch.to(device) 
 
             if is_finetune_eval:
+                # Temporarily set model to train() mode to enable dropout for augmentation
+                model.train()
                 z_i_tokens = model(src_batch, mask_batch)
                 z_j_tokens = model(src_batch, mask_batch)
+                model.eval() # Set back to eval mode
+
                 z_i = mean_pooling(z_i_tokens, mask_batch)
                 z_j = mean_pooling(z_j_tokens, mask_batch)
                 loss = criterion(z_i, z_j)
