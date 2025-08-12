@@ -197,7 +197,9 @@ class MPNetSelfAttention(nn.Module):
         # Attention output
         context = torch.matmul(attn_probs, value_layer)  # [batch, heads, seq, head_size]
         # Reshape back to [batch, seq, hidden]
-        context = context.squeeze().permute(0, 2, 1, 3).contiguous().view(batch_size, seq_len, self.all_head_size)
+        
+        context = context.view(batch_size, self.num_attention_heads, seq_len, self.head_size)
+        context = context.permute(0, 2, 1, 3).contiguous().view(batch_size, seq_len, self.all_head_size)
         # Final linear layer
         attn_output = self.out(context)
         return attn_output
