@@ -12,6 +12,7 @@ from torch.nn.utils import clip_grad_norm_
 from tokenizers import Tokenizer
 from tokenizer import tokenize
 from dataset import LazyLoader, split_train_test_set
+from remove_duplicates import remove_duplicate_lines
 from network import MissingFinder, Encoder, mean_pooling, SentenceEncoder
 from info_nce_loss import InfoNCELoss
 from  debiased_contrastive_loss import DebiasedContrastiveLoss
@@ -538,8 +539,19 @@ def main():
     # --- Initial Setup ---
     if args.setup_data:
         print("--- Running Initial Data Setup ---")
+
+        input_file_for_split = os.path.join(project_dir, data_cfg['input_path'])
+        if data_cfg['remove_duplicates']:
+            print("--- Removing duplicate lines ---")
+            no_duplicates_path = os.path.join(project_dir, data_cfg['no_duplicates_path'])
+            remove_duplicate_lines(input_file_for_split, no_duplicates_path)
+            input_file_for_split = no_duplicates_path
+            print("--- Creating train/test split from deduplicated data ---")
+        else:
+            print("--- Creating train/test split from original data ---")
+
         split_train_test_set(
-            os.path.join(project_dir, data_cfg['input_path']),
+            input_file_for_split,
             os.path.join(project_dir, 'data'),
             data_cfg['test_size']
         )
