@@ -231,27 +231,36 @@ def run_training(config, start_from_scratch=False):
     model.tokenizer_mask_id = tokenizer.token_to_id("<mask>")
     model.to(device)
 
-    model_save_path = os.path.join(data_cfg['project_dir'], train_cfg['model_save_path'])
-    if not start_from_scratch and os.path.exists(model_save_path):
-        print(f"Resuming training from saved model: {model_save_path}")
-        model.load_state_dict(torch.load(model_save_path))
-    else:
-        print("Starting training from scratch.")
-
-    # --- Optimizer, Criterion & Scheduler ---
+    
     optimizer = get_optimizer(model_params['optimizer_name'], model.parameters(), model_params['learning_rate'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, 
-        mode='min', 
-        factor=train_cfg['scheduler_factor'], 
-        patience=train_cfg['scheduler_patience'], 
+        optimizer,
+        mode='min',
+        factor=train_cfg['scheduler_factor'],
+        patience=train_cfg['scheduler_patience'],
     )
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id("<pad>"))
 
-    # --- Training Loop ---
+    model_save_path = os.path.join(data_cfg['project_dir'], train_cfg['model_save_path'])
+    start_epoch = 0
     best_eval_loss = float('inf')
-    for epoch in range(train_cfg['epochs']):
-        print(f"\n--- Epoch {epoch+1}/{train_cfg['epochs']} ---")
+
+    if not start_from_scratch and os.path.exists(model_save_path):
+        print(f"Resuming training from saved model: {model_save_path}")
+        checkpoint = torch.load(model_save_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        best_eval_loss = checkpoint['best_eval_loss']
+        start_epoch = checkpoint['epoch'] + 1
+    else:
+        print("Starting training from scratch.")
+
+    
+
+    # --- Training Loop ---
+    for epoch in range(start_epoch, start_epoch + train_cfg['epochs']):
+        print(f"\n--- Epoch {epoch+1}/{start_epoch + train_cfg['epochs']} ---")
         avg_train_loss = run_pretraining_epoch(model, train_loader.loader(),train_loader.collate_fn, criterion, optimizer, device, train_cfg)
         avg_eval_loss = evaluate(model, eval_loader.loader(), eval_loader.collate_fn, criterion, device, train_cfg, is_finetune_eval=False)
         
@@ -262,7 +271,14 @@ def run_training(config, start_from_scratch=False):
         if avg_eval_loss < best_eval_loss:
             best_eval_loss = avg_eval_loss
             print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving model to {model_save_path}")
-            torch.save(model.state_dict(), model_save_path)
+            checkpoint = {
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_eval_loss': best_eval_loss,
+                'epoch': epoch
+            }
+            torch.save(checkpoint, model_save_path)
             # Save config used for this model
             config_save_path = os.path.join(data_cfg['project_dir'], train_cfg['config_save_path'])
             with open(config_save_path, 'w') as f:
@@ -319,74 +335,78 @@ def run_finetuning(config, start_from_scratch=False):
     pre_trained_path = os.path.join(data_cfg['project_dir'], train_cfg['model_save_path'])
     finetuned_path = os.path.join(data_cfg['project_dir'], finetune_cfg['model_save_path'])
 
-    model = None
+    model = MPNet(
+        vocab_size=tokenizer.get_vocab_size(),
+        embedding_dim=base_model_params['embedding_dim'],
+        num_attention_heads=base_model_params['num_attention_heads'],
+        num_encoder_layers=base_model_params['num_encoder_layers'],
+        dropout=base_model_params['dropout']
+    )
+    # We only fine-tune the encoder part
+    model.to(device)
+    start_epoch = 0
+    best_eval_loss = float('inf')
+    # --- Optimizer, Criterion & Scheduler ---
+    optimizer = get_optimizer(
+       finetune_hyperparams['optimizer_name'],
+       filter(lambda p: p.requires_grad, model.parameters()),
+       finetune_hyperparams['learning_rate']
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+       optimizer,
+       'min',
+       factor=finetune_cfg['scheduler_factor'],
+       patience=finetune_cfg['scheduler_patience'],
+    )
+    loss_cfg = finetune_cfg['loss']
+    if loss_cfg['name'] == 'debiased_contrastive':
+       print("Using DebiasedContrastiveLoss")
+       criterion = DebiasedContrastiveLoss(
+           temperature=loss_cfg['temperature'],
+           p=loss_cfg['p']
+       )
+    else:
+       print("Using InfoNCELoss")
+       criterion = InfoNCELoss(temperature=loss_cfg['temperature'])
+
     # --- Model Loading Logic for --new flag ---
     if not start_from_scratch and os.path.exists(finetuned_path):
         print(f"Resuming fine-tuning from previously fine-tuned model: {finetuned_path}")
-        model = MPNet(
-            vocab_size=tokenizer.get_vocab_size(),
-            embedding_dim=base_model_params['embedding_dim'],
-            num_attention_heads=base_model_params['num_attention_heads'],
-            num_encoder_layers=base_model_params['num_encoder_layers'],
-            dropout=base_model_params['dropout']
-        )
-        model.load_state_dict(torch.load(finetuned_path))
+        checkpoint = torch.load(finetuned_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        best_eval_loss = checkpoint['best_eval_loss']
+        start_epoch = checkpoint['epoch'] + 1
     elif os.path.exists(pre_trained_path):
         print(f"Starting new fine-tuning session from pre-trained model: {pre_trained_path}")
-        model_to_load = MPNet(
-            vocab_size=tokenizer.get_vocab_size(),
-            embedding_dim=base_model_params['embedding_dim'],
-            num_attention_heads=base_model_params['num_attention_heads'],
-            num_encoder_layers=base_model_params['num_encoder_layers'],
-            dropout=base_model_params['dropout']
-        )
-        model_to_load.load_state_dict(torch.load(pre_trained_path))
-        model = model_to_load.encoder
+        checkpoint = torch.load(pre_trained_path) # Load the full checkpoint
+        model.load_state_dict(checkpoint['model_state_dict']) # Load only the model's state_dict
+        # Reset best_eval_loss, optimizer, scheduler for a fresh fine-tuning start
+        best_eval_loss = float('inf')
+        start_epoch = 0
     else:
         print(f"Error: Pre-trained model not found at {pre_trained_path}. Please run pre-training first.")
         return
 
-    # We only fine-tune the encoder part
-    model.to(device)
+
 
     # --- Freeze Layers ---
-    num_layers = len(model.encoder.layers)
+    num_layers = len(model.layers)
     num_layers_to_freeze = int(math.ceil(num_layers * finetune_cfg['freeze_layer_ratio']))
     print(f"Freezing the bottom {num_layers_to_freeze} out of {num_layers} encoder layers.")
-    
-    for param in model.embedding.parameters():
-        param.requires_grad = False
-    for i in range(num_layers_to_freeze):
-        for param in model.encoder.layers[i].parameters():
-            param.requires_grad = False
 
-    # --- Optimizer, Criterion & Scheduler ---
-    optimizer = get_optimizer(
-        finetune_hyperparams['optimizer_name'], 
-        filter(lambda p: p.requires_grad, model.parameters()),
-        finetune_hyperparams['learning_rate']
-    )
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        'min',
-        factor=finetune_cfg['scheduler_factor'],
-        patience=finetune_cfg['scheduler_patience'],
-    )
-    loss_cfg = finetune_cfg['loss']
-    if loss_cfg['name'] == 'debiased_contrastive':
-        print("Using DebiasedContrastiveLoss")
-        criterion = DebiasedContrastiveLoss(
-            temperature=loss_cfg['temperature'],
-            p=loss_cfg['p']
-        )
-    else:
-        print("Using InfoNCELoss")
-        criterion = InfoNCELoss(temperature=loss_cfg['temperature'])
+    for param in model.word_embeddings.parameters():
+       param.requires_grad = False
+    for param in model.position_embeddings.parameters():
+       param.requires_grad = False
+    for i in range(num_layers_to_freeze):
+       for param in model.layers[i].parameters():
+           param.requires_grad = False
 
     # --- Fine-Tuning Loop ---
-    best_eval_loss = float('inf')
-    for epoch in range(finetune_cfg['epochs']):
-        print(f"\n--- Finetune Epoch {epoch+1}/{finetune_cfg['epochs']} ---")
+    for epoch in range(start_epoch, start_epoch + finetune_cfg['epochs']):
+        print(f"\n--- Finetune Epoch {epoch+1}/{start_epoch + finetune_cfg['epochs']} ---")
         avg_train_loss = run_finetuning_epoch(model, train_loader.loader(), train_loader.collate_fn,  criterion, optimizer, device, finetune_cfg)
         avg_eval_loss = evaluate(model, eval_loader.loader(), train_loader.collate_fn,  criterion, device, finetune_cfg, is_finetune_eval=True)
         
@@ -397,7 +417,14 @@ def run_finetuning(config, start_from_scratch=False):
         if avg_eval_loss < best_eval_loss:
             best_eval_loss = avg_eval_loss
             print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving finetuned model to {finetuned_path}")
-            torch.save(model.state_dict(), finetuned_path)
+            checkpoint = {
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_eval_loss': best_eval_loss,
+                'epoch': epoch
+            }
+            torch.save(checkpoint, finetuned_path)
     
     # --- Save Final Production Model ---
     print("\n--- Fine-tuning complete. Saving final production-ready model. ---")
@@ -410,8 +437,8 @@ def run_finetuning(config, start_from_scratch=False):
         dropout=base_model_params['dropout']
     )
     # 2. Load the best fine-tuned weights into it
-    best_weights = torch.load(finetuned_path)
-    final_encoder.load_state_dict(best_weights)
+    checkpoint = torch.load(finetuned_path)
+    final_encoder.load_state_dict(checkpoint['model_state_dict'])
 
     # 3. Create the final SentenceMPNet wrapper
     production_model = SentenceEncoder(encoder=final_encoder)
