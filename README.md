@@ -27,7 +27,7 @@ The project supports a full end-to-end workflow:
 1.  **Data Preparation**: Automatically splits your raw text into training and test sets.
 2.  **Tokenizer Training**: Trains a custom tokenizer on your data.
 3.  **Hyperparameter Optimization (Optional but Recommended)**: Uses Optuna to find the best model architecture (e.g., number of layers, embedding size) and training parameters for your specific dataset.
-4.  **Pre-training**: The model first learns the structure of the language using a Masked Language Modeling (MLM) objective.
+4.  **Pre-training**: The model first learns the structure of the language using a masked and permuted language modeling architecture.
 5.  **Fine-tuning**: The pre-trained model is then fine-tuned using a contrastive learning objective. This project supports both the standard **InfoNCE loss** and a more advanced **Debiased Contrastive Loss**. This step is crucial for producing high-quality sentence embeddings that are well-suited for semantic similarity tasks.
 
 ## Installation and Usage
