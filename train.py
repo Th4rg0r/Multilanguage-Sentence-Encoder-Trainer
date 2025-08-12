@@ -13,7 +13,7 @@ from tokenizers import Tokenizer
 from tokenizer import tokenize
 from dataset import LazyLoader, split_train_test_set
 from remove_duplicates import remove_duplicate_lines
-from network import MissingFinder, Encoder, mean_pooling, SentenceEncoder
+from network import  MPNet, mean_pooling, SentenceEncoder
 from info_nce_loss import InfoNCELoss
 from  debiased_contrastive_loss import DebiasedContrastiveLoss
 
@@ -66,10 +66,13 @@ def run_pretraining_epoch(model, loader, collate_fn, criterion, optimizer, devic
             src_batch, mask_batch, labels_batch = src_batch.to(device), mask_batch.to(device), labels_batch.to(device)
 
             outputs = model(src_batch, mask_batch)
-            masked_indices = (src_batch == model.tokenizer_mask_id).nonzero(as_tuple=True)
-            masked_logits = outputs[masked_indices]
-            
-            unscaled_loss = criterion(masked_logits, labels_batch)
+
+            batch_size, seq_len, vocab_size = outputs.size()
+            logits = outputs.view(batch_size * seq_len, vocab_size)
+            labels = labels_batch.view(batch_size * seq_len)
+
+            unscaled_loss = criterion(logits, labels)
+
             total_loss += unscaled_loss.item()
             
             scaled_loss = unscaled_loss / accumulation_steps
@@ -79,7 +82,6 @@ def run_pretraining_epoch(model, loader, collate_fn, criterion, optimizer, devic
                 clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
                 optimizer.zero_grad()
-            
             bar.text(f"Loss: {unscaled_loss.item():.4f}")
             bar()
     
@@ -168,15 +170,18 @@ def evaluate(model, loader, collate_fn, criterion, device, config, is_finetune_e
             else:
                 labels_batch = labels_batch.to(device)
                 outputs = model(src_batch, mask_batch)
-                masked_indices = (src_batch == model.tokenizer_mask_id).nonzero(as_tuple=True)
-                masked_logits = outputs[masked_indices]
-                loss = criterion(masked_logits, labels_batch)
-            
+                batch_size, seq_len, vocab_size = outputs.size()
+                logits = outputs.view(batch_size * seq_len, vocab_size)
+                labels = labels_batch.view(batch_size * seq_len)
+                loss = criterion(logits, labels)
+
+
             total_loss += loss.item()
             bar.text(f"Eval Loss: {loss.item():.4f}")
             bar()
-            
-    return total_loss / (i + 1)
+    result_loss = total_loss / (i + 1)
+    print (f"Evaluation Loss:{result_loss}")
+    return result_loss
 
 # -------------------
 # Main Workflows
@@ -216,12 +221,11 @@ def run_training(config, start_from_scratch=False):
     eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['test_path']), train_cfg['batch_size'], data_cfg['max_word_per_sentence'])
 
     # --- Model ---
-    model = MissingFinder(
+    model = MPNet(
         vocab_size=tokenizer.get_vocab_size(),
         embedding_dim=model_params['embedding_dim'],
         num_attention_heads=model_params['num_attention_heads'],
         num_encoder_layers=model_params['num_encoder_layers'],
-        feed_forward_dim=model_params['feed_forward_dim'],
         dropout=model_params['dropout']
     )
     model.tokenizer_mask_id = tokenizer.token_to_id("<mask>")
@@ -304,12 +308,11 @@ def run_finetuning(config, start_from_scratch=False):
 
     # --- Model Instantiation ---
     model_to_load = None
-    MissingFinder(
+    MPNet(
         vocab_size=tokenizer.get_vocab_size(),
         embedding_dim=base_model_params['embedding_dim'],
         num_attention_heads=base_model_params['num_attention_heads'],
         num_encoder_layers=base_model_params['num_encoder_layers'],
-        feed_forward_dim=base_model_params['feed_forward_dim'],
         dropout=base_model_params['dropout']
     )
     
@@ -320,23 +323,21 @@ def run_finetuning(config, start_from_scratch=False):
     # --- Model Loading Logic for --new flag ---
     if not start_from_scratch and os.path.exists(finetuned_path):
         print(f"Resuming fine-tuning from previously fine-tuned model: {finetuned_path}")
-        model = Encoder(
+        model = MPNet(
             vocab_size=tokenizer.get_vocab_size(),
             embedding_dim=base_model_params['embedding_dim'],
             num_attention_heads=base_model_params['num_attention_heads'],
             num_encoder_layers=base_model_params['num_encoder_layers'],
-            feed_forward_dim=base_model_params['feed_forward_dim'],
             dropout=base_model_params['dropout']
         )
         model.load_state_dict(torch.load(finetuned_path))
     elif os.path.exists(pre_trained_path):
         print(f"Starting new fine-tuning session from pre-trained model: {pre_trained_path}")
-        model_to_load = MissingFinder(
+        model_to_load = MPNet(
             vocab_size=tokenizer.get_vocab_size(),
             embedding_dim=base_model_params['embedding_dim'],
             num_attention_heads=base_model_params['num_attention_heads'],
             num_encoder_layers=base_model_params['num_encoder_layers'],
-            feed_forward_dim=base_model_params['feed_forward_dim'],
             dropout=base_model_params['dropout']
         )
         model_to_load.load_state_dict(torch.load(pre_trained_path))
@@ -401,19 +402,18 @@ def run_finetuning(config, start_from_scratch=False):
     # --- Save Final Production Model ---
     print("\n--- Fine-tuning complete. Saving final production-ready model. ---")
     # 1. Create a fresh encoder instance with the same architecture
-    final_encoder = Encoder(
+    final_encoder = MPNet(
         vocab_size=tokenizer.get_vocab_size(),
         embedding_dim=base_model_params['embedding_dim'],
         num_attention_heads=base_model_params['num_attention_heads'],
         num_encoder_layers=base_model_params['num_encoder_layers'],
-        feed_forward_dim=base_model_params['feed_forward_dim'],
         dropout=base_model_params['dropout']
     )
     # 2. Load the best fine-tuned weights into it
     best_weights = torch.load(finetuned_path)
     final_encoder.load_state_dict(best_weights)
 
-    # 3. Create the final SentenceEncoder wrapper
+    # 3. Create the final SentenceMPNet wrapper
     production_model = SentenceEncoder(encoder=final_encoder)
     production_model.eval() # Set to evaluation mode
 
@@ -478,16 +478,14 @@ def run_optimization(config, start_new_study=False):
         num_attention_heads = trial.suggest_categorical("num_attention_heads", valid_heads)
 
         num_encoder_layers = trial.suggest_int("num_encoder_layers", optimize_cfg['num_encoder_layers']['min'], optimize_cfg['num_encoder_layers']['max'], step=optimize_cfg['num_encoder_layers']['step'])
-        feed_forward_dim = trial.suggest_int("feed_forward_dim", optimize_cfg['feed_forward_dim']['min'], optimize_cfg['feed_forward_dim']['max'], step=optimize_cfg['feed_forward_dim']['step'])
         dropout = trial.suggest_float("dropout", optimize_cfg['dropout']['min'], optimize_cfg['dropout']['max'])
 
         # --- Model, Optimizer, Criterion ---
-        model = MissingFinder(
+        model = MPNet(
             vocab_size=tokenizer.get_vocab_size(),
             embedding_dim=embedding_dim,
             num_attention_heads=num_attention_heads,
             num_encoder_layers=num_encoder_layers,
-            feed_forward_dim=feed_forward_dim,
             dropout=dropout
         )
         model.tokenizer_mask_id = tokenizer.token_to_id("<mask>")

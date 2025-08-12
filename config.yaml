@@ -61,10 +61,6 @@ optimize:
     min: 4
     max: 8
     step: 2
-  feed_forward_dim: # The dimension of the feed-forward network inside the Transformer.
-    min: 512
-    max: 2048
-    step: 512
   dropout: # The search range for the dropout rate. 0.1 is a common baseline.
     min: 0.05
     max: 0.2
@@ -79,7 +75,7 @@ train:
   # Performs gradient accumulation. The effective batch size will be `batch_size * accumulation_steps`.
   # This allows for larger effective batch sizes without increasing memory usage.
   # `batch_size` must be a multiple of this value.
-  accumulation_steps: 4
+  accumulation_steps: 1
   max_train_batches: -1         # Limits the number of training batches per epoch. Set to -1 for no limit.
   max_eval_batches: -1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
   model_save_path: models/model.pt # Path to save the final trained model weights.
@@ -93,7 +89,6 @@ train:
     embedding_dim: 512          # The model's embedding dimension.
     num_attention_heads: 8      # The number of attention heads.
     num_encoder_layers: 6       # The number of layers in the Transformer encoder.
-    feed_forward_dim: 2048      # The dimension of the feed-forward network.
     dropout: 0.15               # The dropout rate.
     learning_rate: 1e-5         # The learning rate.
 
