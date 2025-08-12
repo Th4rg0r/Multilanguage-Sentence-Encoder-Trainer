@@ -515,11 +515,11 @@ def run_optimization(config, start_new_study=False):
 def main():
     """Main function to drive the script."""
     parser = argparse.ArgumentParser(description="Multilanguage Sentence Encoder Trainer")
+    parser.add_argument('--setup_data', action='store_true', help='Run the initial data setup (splitting and de-duplicating).')
+    parser.add_argument('--setup_tokenizer', action='store_true', help='(Re)create the tokenizer.')
     parser.add_argument('--optimize', action='store_true', help='Run hyperparameter optimization with Optuna.')
     parser.add_argument('--finetune', action='store_true', help='Run contrastive learning fine-tuning on a pre-trained model.')
     parser.add_argument('--new', action='store_true', help='Start a new study or train from scratch, ignoring previous state.')
-    parser.add_argument('--setup_data', action='store_true', help='Run the initial data setup (splitting and de-duplicating).')
-    parser.add_argument('--setup_tokenizer', action='store_true', help='(Re)create the tokenizer.')
     args = parser.parse_args()
 
     # --- Load Config ---
