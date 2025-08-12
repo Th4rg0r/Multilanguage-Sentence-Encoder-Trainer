@@ -31,12 +31,12 @@ tokenizer:
 # -------------------
 # Defines the search space and execution for the hyperparameter search.
 optimize:
-  epochs: 12
-  n_trials: 50                # Total number of Optuna trials to run for the hyperparameter search.
+  epochs: 1
+  n_trials: 20                # Total number of Optuna trials to run for the hyperparameter search.
   storage_name: "sqlite:///data/my_study.db"
   study_name: "encoder-optimization-v1"
-  max_train_batches_per_epoch: 1250 # Limits the number of training batches per epoch during optimization to speed up trials. Set to -1 for no limit.
-  max_eval_batches_per_epoch: 250  # Limits the number of evaluation batches per epoch during optimization.
+  max_train_batches_per_epoch: 1 # Limits the number of training batches per epoch during optimization to speed up trials. Set to -1 for no limit.
+  max_eval_batches_per_epoch: 1  # Limits the number of evaluation batches per epoch during optimization.
   batch_size: 32            # Fixed batch size for all optimization trials.
   accumulation_steps: 4     # Fixed number of gradient accumulation steps.
   
@@ -73,14 +73,14 @@ optimize:
 # -------------------
 # Settings for training the model with a fixed set of hyperparameters.
 train:
-  epochs: 7
+  epochs: 1
   batch_size: 32
   # Performs gradient accumulation. The effective batch size will be `batch_size * accumulation_steps`.
   # This allows for larger effective batch sizes without increasing memory usage.
   # `batch_size` must be a multiple of this value.
   accumulation_steps: 4
-  max_train_batches: -1         # Limits the number of training batches per epoch. Set to -1 for no limit.
-  max_eval_batches: -1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
+  max_train_batches: 1         # Limits the number of training batches per epoch. Set to -1 for no limit.
+  max_eval_batches: 1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
   model_save_path: models/model.pt # Path to save the final trained model weights.
   config_save_path: models/model.cfg # Path to save the configuration of the final trained model.
   scheduler_patience: 2           # Scheduler: Number of epochs with no improvement after which learning rate will be reduced.
@@ -101,9 +101,12 @@ train:
 # -------------------
 # Settings for fine-tuning a pre-trained model.
 finetune:
-  epochs: 7
+  epochs: 1
   # The ratio of BOTTOM layers to freeze during fine-tuning. 0.25 means the bottom 25% of layers will be frozen.
   # The embedding layer is always frozen in addition to this.
+  batch_size: 32            # Fixed batch size 
+  max_train_batches: 1         # Limits the number of training batches per epoch. Set to -1 for no limit.
+  max_eval_batches: 1          # Limits the number of evaluation batches per epoch. Set to -1 for no limit.
   freeze_layer_ratio: 0.25
   model_save_path: models/model_finetuned.pt # Path to save the final fine-tuned model weights.
   scheduler_patience: 1           # Scheduler: Number of epochs with no improvement after which learning rate will be reduced.

@@ -46,7 +46,7 @@ def get_optimizer(optimizer_name, parameters, lr):
 # Core Training & Evaluation Logic
 # -------------------
 
-def run_pretraining_epoch(model, loader, criterion, optimizer, device, config):
+def run_pretraining_epoch(model, loader, collate_fn, criterion, optimizer, device, config):
     """Runs a single epoch of masked language model pre-training."""
     model.train()
     total_loss = 0
@@ -58,7 +58,7 @@ def run_pretraining_epoch(model, loader, criterion, optimizer, device, config):
             if max_batches != -1 and i >= max_batches:
                 break
             
-            src_batch, mask_batch, labels_batch = batch
+            src_batch, mask_batch, labels_batch = collate_fn(batch)
             src_batch, mask_batch, labels_batch = src_batch.to(device), mask_batch.to(device), labels_batch.to(device)
 
             outputs = model(src_batch, mask_batch)
@@ -81,7 +81,7 @@ def run_pretraining_epoch(model, loader, criterion, optimizer, device, config):
     
     return total_loss / (i + 1)
 
-def run_finetuning_epoch(model, loader, criterion, optimizer, device, config):
+def run_finetuning_epoch(model, loader,collate_fn,  criterion, optimizer, device, config):
     """Runs a single epoch of contrastive learning fine-tuning."""
     model.train()
     total_loss = 0
@@ -92,7 +92,7 @@ def run_finetuning_epoch(model, loader, criterion, optimizer, device, config):
             if max_batches != -1 and i >= max_batches:
                 break
             
-            src_batch, mask_batch = batch
+            src_batch, mask_batch = collate_fn(batch)
             src_batch, mask_batch = src_batch.to(device), mask_batch.to(device)
             optimizer.zero_grad()
 
@@ -114,7 +114,7 @@ def run_finetuning_epoch(model, loader, criterion, optimizer, device, config):
             
     return total_loss / (i + 1)
 
-def evaluate(model, loader, criterion, device, config, is_finetune_eval):
+def evaluate(model, loader, collate_fn, criterion, device, config, is_finetune_eval):
     """Evaluates the model on the evaluation set."""
     model.eval()
     total_loss = 0
@@ -125,8 +125,13 @@ def evaluate(model, loader, criterion, device, config, is_finetune_eval):
             if max_batches != -1 and i >= max_batches:
                 break
             
-            src_batch, mask_batch, labels_batch = batch if not is_finetune_eval else (*batch, None)
-            src_batch, mask_batch = src_batch.to(device), mask_batch.to(device)
+            src_batch, mask_batch, labels_batch = None, None, None
+            if not is_finetune_eval:
+                src_batch, mask_batch, labels_batch = collate_fn(batch) 
+            else:
+                src_batch, mask_batch= collate_fn(batch) 
+            
+            src_batch, mask_batch = src_batch.to(device), mask_batch.to(device) 
 
             if is_finetune_eval:
                 z_i_tokens = model(src_batch, mask_batch)
@@ -169,6 +174,7 @@ def run_training(config, start_from_scratch=False):
     """Main workflow for pre-training the model."""
     print("--- Starting Model Pre-Training ---")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     
     # --- Configs ---
     data_cfg = config['data']
@@ -182,7 +188,7 @@ def run_training(config, start_from_scratch=False):
     # --- Load Tokenizer & Dataloaders ---
     tokenizer = Tokenizer.from_file(os.path.join(data_cfg['project_dir'], tokenizer_cfg['save_path']))
     train_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['train_path']), train_cfg['batch_size'], data_cfg['max_word_per_sentence'])
-    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['eval_path']), train_cfg['batch_size'], data_cfg['max_word_per_sentence'])
+    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['test_path']), train_cfg['batch_size'], data_cfg['max_word_per_sentence'])
 
     # --- Model ---
     model = MissingFinder(
@@ -207,10 +213,9 @@ def run_training(config, start_from_scratch=False):
     optimizer = get_optimizer(model_params['optimizer_name'], model.parameters(), model_params['learning_rate'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, 
-        'min', 
+        mode='min', 
         factor=train_cfg['scheduler_factor'], 
         patience=train_cfg['scheduler_patience'], 
-        verbose=True
     )
     criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.token_to_id("<pad>"))
 
@@ -218,8 +223,8 @@ def run_training(config, start_from_scratch=False):
     best_eval_loss = float('inf')
     for epoch in range(train_cfg['epochs']):
         print(f"\n--- Epoch {epoch+1}/{train_cfg['epochs']} ---")
-        avg_train_loss = run_pretraining_epoch(model, train_loader.loader(), criterion, optimizer, device, train_cfg)
-        avg_eval_loss = evaluate(model, eval_loader.loader(), criterion, device, train_cfg, is_finetune_eval=False)
+        avg_train_loss = run_pretraining_epoch(model, train_loader.loader(),train_loader.collate_fn, criterion, optimizer, device, train_cfg)
+        avg_eval_loss = evaluate(model, eval_loader.loader(), eval_loader.collate_fn, criterion, device, train_cfg, is_finetune_eval=False)
         
         print(f"Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
@@ -239,6 +244,7 @@ def run_finetuning(config, start_from_scratch=False):
     """Main workflow for fine-tuning the model with contrastive loss."""
     print("--- Starting Model Fine-Tuning ---")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
 
     # --- Configs ---
     data_cfg = config['data']
@@ -254,7 +260,7 @@ def run_finetuning(config, start_from_scratch=False):
     # --- Load Tokenizer & Dataloaders ---
     tokenizer = Tokenizer.from_file(os.path.join(data_cfg['project_dir'], tokenizer_cfg['save_path']))
     train_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['train_path']), finetune_cfg['batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
-    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['eval_path']), finetune_cfg['batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
+    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['test_path']), finetune_cfg['batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
 
     # --- Model Instantiation ---
     model_to_load = MissingFinder(
@@ -306,7 +312,6 @@ def run_finetuning(config, start_from_scratch=False):
         'min',
         factor=finetune_cfg['scheduler_factor'],
         patience=finetune_cfg['scheduler_patience'],
-        verbose=True
     )
     criterion = InfoNCELoss(temperature=0.07)
 
@@ -314,8 +319,8 @@ def run_finetuning(config, start_from_scratch=False):
     best_eval_loss = float('inf')
     for epoch in range(finetune_cfg['epochs']):
         print(f"\n--- Finetune Epoch {epoch+1}/{finetune_cfg['epochs']} ---")
-        avg_train_loss = run_finetuning_epoch(model, train_loader.loader(), criterion, optimizer, device, finetune_cfg)
-        avg_eval_loss = evaluate(model, eval_loader.loader(), criterion, device, finetune_cfg, is_finetune_eval=True)
+        avg_train_loss = run_finetuning_epoch(model, train_loader.loader(), train_loader.collate_fn,  criterion, optimizer, device, finetune_cfg)
+        avg_eval_loss = evaluate(model, eval_loader.loader(), train_loader.collate_fn,  criterion, device, finetune_cfg, is_finetune_eval=True)
         
         print(f"Finetune Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
@@ -363,6 +368,7 @@ def run_finetuning(config, start_from_scratch=False):
 def run_optimization(config, start_new_study=False):
     """Main workflow for hyperparameter optimization with Optuna."""
     print("--- Starting Hyperparameter Optimization ---")
+    device = torch.device("cpu")
     
     # --- Configs ---
     data_cfg = config['data']
@@ -372,6 +378,7 @@ def run_optimization(config, start_new_study=False):
     # --- Storage & Study ---
     storage_name = optimize_cfg['storage_name']
     study_name = optimize_cfg['study_name']
+    print("storage-study-", storage_name, "-", study_name)
     if start_new_study:
         try:
             print(f"Starting new study. Deleting existing study '{study_name}' if it exists...")
@@ -389,15 +396,18 @@ def run_optimization(config, start_new_study=False):
     # --- Load Tokenizer & Dataloaders ---
     tokenizer = Tokenizer.from_file(os.path.join(data_cfg['project_dir'], tokenizer_cfg['save_path']))
     train_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['train_path']), optimize_cfg['batch_size'], data_cfg['max_word_per_sentence'])
-    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['eval_path']), optimize_cfg['batch_size'], data_cfg['max_word_per_sentence'])
+    eval_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['test_path']), optimize_cfg['batch_size'], data_cfg['max_word_per_sentence'])
 
     # --- Objective Function ---
     def objective(trial):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cpu")
         
         # --- Hyperparameter Search Space ---
         optimizer_name = trial.suggest_categorical("optimizer_name", optimize_cfg['optimizer_name'])
-        learning_rate = trial.suggest_float("learning_rate", optimize_cfg['learning_rate']['min'], optimize_cfg['learning_rate']['max'], log=True)
+        
+        print(f"lr:{type(optimize_cfg['learning_rate']['min'])}")
+        learning_rate = trial.suggest_float("learning_rate", float(optimize_cfg['learning_rate']['min']), float(optimize_cfg['learning_rate']['max']), log=True)
         embedding_dim = trial.suggest_categorical("embedding_dim", optimize_cfg['embedding_dim'])
         
         valid_heads = [h for h in optimize_cfg['num_attention_heads'] if embedding_dim % h == 0]
@@ -428,11 +438,11 @@ def run_optimization(config, start_new_study=False):
         best_eval_loss = float('inf')
         for epoch in range(optimize_cfg['epochs']):
             print(f"\n(Trial {trial.number}) Epoch {epoch+1}/{optimize_cfg['epochs']}")
-            run_pretraining_epoch(model, train_loader.loader(), criterion, optimizer, device, {
+            run_pretraining_epoch(model, train_loader.loader(),train_loader.collate_fn, criterion, optimizer, device, {
                 'max_train_batches': optimize_cfg['max_train_batches_per_epoch'],
                 'accumulation_steps': optimize_cfg['accumulation_steps']
             })
-            avg_eval_loss = evaluate(model, eval_loader.loader(), criterion, device, {
+            avg_eval_loss = evaluate(model, eval_loader.loader(), eval_loader.collate_fn, criterion, device, {
                 'max_eval_batches': optimize_cfg['max_eval_batches_per_epoch']
             }, is_finetune_eval=False)
             
@@ -477,6 +487,11 @@ def main():
     data_cfg = config['data']
     tokenizer_cfg = config['tokenizer']
     project_dir = os.getcwd()
+    os.makedirs(project_dir, exist_ok=True)
+    os.makedirs(os.path.join(project_dir, "data"), exist_ok=True)
+    os.makedirs(os.path.dirname(config['final_model_path']), exist_ok=True)
+    os.makedirs(os.path.dirname(config['final_model_path']), exist_ok=True)
+    os.makedirs(os.path.dirname(config['train']['model_save_path']), exist_ok=True)
     data_cfg['project_dir'] = project_dir # Add project dir to config for easy path joining
 
     # --- Initial Setup ---
