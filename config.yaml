@@ -32,7 +32,7 @@ tokenizer:
 # Defines the search space and execution for the hyperparameter search.
 optimize:
   epochs: 12
-  n_trials: 20                # Total number of Optuna trials to run for the hyperparameter search.
+  n_trials: 50                # Total number of Optuna trials to run for the hyperparameter search.
   storage_name: "sqlite:///data/my_study.db"
   study_name: "encoder-optimization-v1"
   max_train_batches_per_epoch: 1250 # Limits the number of training batches per epoch during optimization to speed up trials. Set to -1 for no limit.
