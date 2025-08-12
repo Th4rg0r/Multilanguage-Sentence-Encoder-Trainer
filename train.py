@@ -277,6 +277,22 @@ def run_finetuning(config, start_from_scratch=False):
     base_model_params = get_model_params_from_config(train_cfg, optimize_cfg['study_name'], optimize_cfg['storage_name'])
     finetune_hyperparams = get_model_params_from_config(finetune_cfg, optimize_cfg['study_name'], optimize_cfg['storage_name'])
 
+    # --- Learning Rate Adjustment for Fine-Tuning ---
+    # If using Optuna's best parameters for fine-tuning, it's common practice to 
+    # use a smaller learning rate than what was optimal for pre-training.
+    if not finetune_cfg['override_with_custom_params']['enabled']:
+        # Check if the parameters came from a study
+        try:
+            study = optuna.load_study(study_name=optimize_cfg['study_name'], storage=optimize_cfg['storage_name'])
+            # If a study exists and we are using its params, reduce the LR
+            original_lr = finetune_hyperparams['learning_rate']
+            finetune_hyperparams['learning_rate'] = original_lr / 10
+            print(f"Fine-tuning with Optuna study parameters. Learning rate adjusted: {original_lr} -> {finetune_hyperparams['learning_rate']:.1e}")
+        except KeyError:
+            # This will trigger if the study doesn't exist, in which case get_model_params_from_config
+            # would have fallen back to custom params, so no LR adjustment is needed.
+            pass
+
     # --- Load Tokenizer & Dataloaders ---
     tokenizer = Tokenizer.from_file(os.path.join(data_cfg['project_dir'], tokenizer_cfg['save_path']))
     train_loader = LazyLoader(tokenizer, os.path.join(data_cfg['project_dir'], data_cfg['train_path']), finetune_cfg['small_batch_size'], data_cfg['max_word_per_sentence'], contrastive_learning=True)
