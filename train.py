@@ -194,7 +194,6 @@ def run_training(config, start_from_scratch=False):
     """Main workflow for pre-training the model."""
     print("--- Starting Model Pre-Training ---")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
     
     # --- Configs ---
     data_cfg = config['data']
@@ -264,7 +263,6 @@ def run_finetuning(config, start_from_scratch=False):
     """Main workflow for fine-tuning the model with contrastive loss."""
     print("--- Starting Model Fine-Tuning ---")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
 
     # --- Configs ---
     data_cfg = config['data']
@@ -386,7 +384,6 @@ def run_finetuning(config, start_from_scratch=False):
 def run_optimization(config, start_new_study=False):
     """Main workflow for hyperparameter optimization with Optuna."""
     print("--- Starting Hyperparameter Optimization ---")
-    device = torch.device("cpu")
     
     # --- Configs ---
     data_cfg = config['data']
@@ -419,7 +416,6 @@ def run_optimization(config, start_new_study=False):
     # --- Objective Function ---
     def objective(trial):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        device = torch.device("cpu")
         
         # --- Hyperparameter Search Space ---
         optimizer_name = trial.suggest_categorical("optimizer_name", optimize_cfg['optimizer_name'])
