@@ -138,7 +138,53 @@ def run_finetuning_epoch(model, loader,collate_fn,  criterion, optimizer, device
             
     return total_loss / (i / accumulation_steps)
 
-def evaluate(model, loader, collate_fn, criterion, device, config, is_finetune_eval):
+def evaluate_finetune(model, loader, collate_fn, criterion, device, config):
+    """Evaluates the finetune model on the evaluation set."""
+    model.eval()
+    total_loss = 0
+    max_batches = config.get('max_eval_batches', -1)
+    z_i_list = []
+    z_j_list = []
+    large_batch_size = config.get('batch_size')
+    small_batch_size = config.get('small_batch_size')
+    accumulation_steps = large_batch_size // small_batch_size
+    with torch.no_grad(), alive_bar(max_batches if max_batches != -1 else None) as bar:
+        for i, batch in enumerate(loader):
+            if max_batches != -1 and i >= max_batches:
+                break
+            
+            src_batch, mask_batch= collate_fn(batch) 
+            
+            src_batch, mask_batch = src_batch.to(device), mask_batch.to(device) 
+
+            # Temporarily set model to train() mode to enable dropout for augmentation
+            model.train()
+            z_i_tokens = model(src_batch, mask_batch)
+            z_j_tokens = model(src_batch, mask_batch)
+            model.eval() # Set back to eval mode
+
+            z_i = mean_pooling(z_i_tokens, mask_batch)
+            z_j = mean_pooling(z_j_tokens, mask_batch)
+            
+            z_i_list.append(z_i)
+            z_j_list.append(z_j)
+
+            if (i + 1) % accumulation_steps == 0:
+                z_i_acc = torch.cat(z_i_list, dim=0)
+                z_j_acc = torch.cat(z_j_list, dim=0)
+                
+                loss = criterion(z_i_acc, z_j_acc)
+                total_loss += loss.item()
+                z_i_list = []
+                z_j_list = []
+                
+                bar.text(f"Loss: {loss.item():.4f}")
+            bar()
+    result_loss = total_loss / (i // accumulation_steps)
+    print (f"Evaluation Loss:{result_loss}")
+    return result_loss
+
+def evaluate(model, loader, collate_fn, criterion, device, config):
     """Evaluates the model on the evaluation set."""
     model.eval()
     total_loss = 0
@@ -149,33 +195,15 @@ def evaluate(model, loader, collate_fn, criterion, device, config, is_finetune_e
             if max_batches != -1 and i >= max_batches:
                 break
             
-            src_batch, mask_batch, labels_batch = None, None, None
-            if not is_finetune_eval:
-                src_batch, mask_batch, labels_batch = collate_fn(batch) 
-            else:
-                src_batch, mask_batch= collate_fn(batch) 
+            src_batch, mask_batch, labels_batch = collate_fn(batch) 
             
             src_batch, mask_batch = src_batch.to(device), mask_batch.to(device) 
-
-            if is_finetune_eval:
-                # Temporarily set model to train() mode to enable dropout for augmentation
-                model.train()
-                z_i_tokens = model(src_batch, mask_batch)
-                z_j_tokens = model(src_batch, mask_batch)
-                model.eval() # Set back to eval mode
-
-                z_i = mean_pooling(z_i_tokens, mask_batch)
-                z_j = mean_pooling(z_j_tokens, mask_batch)
-                loss = criterion(z_i, z_j)
-            else:
-                labels_batch = labels_batch.to(device)
-                outputs = model(src_batch, mask_batch)
-                batch_size, seq_len, vocab_size = outputs.size()
-                logits = outputs.view(batch_size * seq_len, vocab_size)
-                labels = labels_batch.view(batch_size * seq_len)
-                loss = criterion(logits, labels)
-
-
+            labels_batch = labels_batch.to(device)
+            outputs = model(src_batch, mask_batch)
+            batch_size, seq_len, vocab_size = outputs.size()
+            logits = outputs.view(batch_size * seq_len, vocab_size)
+            labels = labels_batch.view(batch_size * seq_len)
+            loss = criterion(logits, labels)
             total_loss += loss.item()
             bar.text(f"Eval Loss: {loss.item():.4f}")
             bar()
@@ -260,7 +288,7 @@ def run_training(config, start_from_scratch=False):
     for epoch in range(start_epoch, start_epoch + train_cfg['epochs']):
         print(f"\n--- Epoch {epoch+1}/{start_epoch + train_cfg['epochs']} ---")
         avg_train_loss = run_pretraining_epoch(model, train_loader.loader(),train_loader.collate_fn, criterion, optimizer, device, train_cfg)
-        avg_eval_loss = evaluate(model, eval_loader.loader(), eval_loader.collate_fn, criterion, device, train_cfg, is_finetune_eval=False)
+        avg_eval_loss = evaluate(model, eval_loader.loader(), eval_loader.collate_fn, criterion, device, train_cfg)
         
         print(f"Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
@@ -417,7 +445,7 @@ def run_finetuning(config, start_from_scratch=False):
     for epoch in range(start_epoch, start_epoch + finetune_cfg['epochs']):
         print(f"\n--- Finetune Epoch {epoch+1}/{start_epoch + finetune_cfg['epochs']} ---")
         avg_train_loss = run_finetuning_epoch(model, train_loader.loader(), train_loader.collate_fn,  criterion, optimizer, device, finetune_cfg)
-        avg_eval_loss = evaluate(model, eval_loader.loader(), train_loader.collate_fn,  criterion, device, finetune_cfg, is_finetune_eval=True)
+        avg_eval_loss = evaluate_finetune(model, eval_loader.loader(), train_loader.collate_fn,  criterion, device, finetune_cfg)
         
         print(f"Finetune Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
@@ -553,7 +581,7 @@ def run_optimization(config, start_new_study=False):
             })
             avg_eval_loss = evaluate(model, eval_loader.loader(), eval_loader.collate_fn, criterion, device, {
                 'max_eval_batches': optimize_cfg['max_eval_batches_per_epoch']
-            }, is_finetune_eval=False)
+            })
             
             trial.report(avg_eval_loss, epoch)
             if avg_eval_loss < best_eval_loss:
