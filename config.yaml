@@ -87,7 +87,7 @@ train:
   
   override_with_custom_params:
     enabled: False              # If true, the training process will use the parameters defined below instead of the best ones found by Optuna.
-    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "AdamW", "RMSprop", "SGD"
+    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "AdamW", "RMSprop"
     embedding_dim: 512          # The model's embedding dimension.
     num_attention_heads: 8      # The number of attention heads.
     num_encoder_layers: 6       # The number of layers in the Transformer encoder.
@@ -119,6 +119,6 @@ finetune:
     # If true, fine-tuning will use the parameters below instead of the best ones found by Optuna.
     # A pre-trained model is required to start fine-tuning.
     enabled: False
-    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "RMSprop", "SGD"
+    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "AdamW", "RMSprop"
     dropout: 0.15               # The dropout rate.
     learning_rate: 1e-5         # The learning rate.
