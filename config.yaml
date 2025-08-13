@@ -72,7 +72,7 @@ optimize:
 # -------------------
 # Settings for training the model with a fixed set of hyperparameters.
 train:
-  epochs: 7
+  epochs: 12
   batch_size: 32
   # Performs gradient accumulation. The effective batch size will be `batch_size * accumulation_steps`.
   # This allows for larger effective batch sizes without increasing memory usage.
@@ -87,7 +87,7 @@ train:
   
   override_with_custom_params:
     enabled: False              # If true, the training process will use the parameters defined below instead of the best ones found by Optuna.
-    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "RMSprop", "SGD"
+    optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "AdamW", "RMSprop", "SGD"
     embedding_dim: 512          # The model's embedding dimension.
     num_attention_heads: 8      # The number of attention heads.
     num_encoder_layers: 6       # The number of layers in the Transformer encoder.
@@ -99,7 +99,7 @@ train:
 # -------------------
 # Settings for fine-tuning a pre-trained model.
 finetune:
-  epochs: 7
+  epochs: 12
   # The ratio of BOTTOM layers to freeze during fine-tuning. 0.25 means the bottom 25% of layers will be frozen.
   # The embedding layer is always frozen in addition to this.
   batch_size: 256            # Fixed batch size 
