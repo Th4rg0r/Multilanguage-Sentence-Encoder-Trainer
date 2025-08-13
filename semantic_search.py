@@ -12,45 +12,56 @@ def load_config():
     with open("config.yaml", "r") as file:
         return yaml.safe_load(file)
 
-def get_or_create_embeddings(config, model, tokenizer):
+EMBEDDING_CHUNK_SIZE = 10000 # Process and save embeddings in chunks of this size
+
+def generate_and_save_embeddings_in_chunks(config, model, tokenizer):
     """
-    Loads sentence embeddings from a file if it exists, otherwise creates them
-    using the provided model and saves them to a file.
+    Generates sentence embeddings in chunks and saves them to separate files.
     """
     data_cfg = config['data']
-    embeddings_path = os.path.join(data_cfg['project_dir'], 'data/embeddings.pt')
     input_file_path = os.path.join(data_cfg['project_dir'], data_cfg['input_path'])
-
-    if os.path.exists(embeddings_path):
-        print(f"Loading existing embeddings from {embeddings_path}...")
-        data = torch.load(embeddings_path)
-        print("Embeddings loaded.")
-        return data['sentences'], data['embeddings']
-
-    print("Embeddings file not found. Creating new embeddings...")
     
+    EMBEDDING_CHUNKS_DIR = os.path.join(data_cfg['project_dir'], 'data/embedding_chunks')
+    os.makedirs(EMBEDDING_CHUNKS_DIR, exist_ok=True)
+
     with open(input_file_path, 'r', encoding='utf-8') as f:
         sentences = [line.strip() for line in f if line.strip()]
 
-    # Generate embeddings in batches to handle large files
-    batch_size = 64
-    all_embeddings = []
-    with alive_bar(20000 // batch_size + 1) as bar:
-    #with alive_bar(len(sentences) // batch_size + 1) as bar:
-        #for i in range(0, len(sentences), batch_size):
-        for i in range(0, 20000, batch_size):
-            batch_sentences = sentences[i:i+batch_size]
-            embeddings = get_sentence_embedding(batch_sentences, model, tokenizer)
-            all_embeddings.append(embeddings)
+    print(f"Generating and saving embeddings in chunks to {EMBEDDING_CHUNKS_DIR}...")
+    
+    batch_size = 64 # Batch size for processing sentences within a chunk
+    all_chunk_paths = []
+    
+    num_sentences = len(sentences)
+    num_chunks = (num_sentences + EMBEDDING_CHUNK_SIZE - 1) // EMBEDDING_CHUNK_SIZE
+
+    with alive_bar(num_chunks, title="Processing embedding chunks") as bar:
+        for chunk_idx in range(num_chunks):
+            start_sentence_idx = chunk_idx * EMBEDDING_CHUNK_SIZE
+            end_sentence_idx = min((chunk_idx + 1) * EMBEDDING_CHUNK_SIZE, num_sentences)
+            
+            chunk_sentences = sentences[start_sentence_idx:end_sentence_idx]
+            
+            chunk_embeddings_list = []
+            for i in range(0, len(chunk_sentences), batch_size):
+                batch_sentences = chunk_sentences[i:i+batch_size]
+                embeddings = get_sentence_embedding(batch_sentences, model, tokenizer)
+                chunk_embeddings_list.append(embeddings)
+            
+            chunk_embeddings_tensor = torch.cat(chunk_embeddings_list, dim=0)
+            
+            chunk_file_path = os.path.join(EMBEDDING_CHUNKS_DIR, f'chunk_{chunk_idx}.pt')
+            torch.save(chunk_embeddings_tensor.cpu(), chunk_file_path) # Save to CPU to avoid GPU memory issues
+            all_chunk_paths.append(chunk_file_path)
             bar()
 
-    all_embeddings_tensor = torch.cat(all_embeddings, dim=0)
+            embeddings = get_sentence_embedding(batch_sentences, model, tokenizer)
+            chunk_embeddings_list.append(embeddings)
+            bar()
 
-    print(f"Saving embeddings to {embeddings_path}...")
-    torch.save({'sentences': sentences, 'embeddings': all_embeddings_tensor}, embeddings_path)
-    print("Embeddings saved.")
     
-    return sentences, all_embeddings_tensor
+    
+    return sentences, all_chunk_paths
 
 def get_sentence_embedding(sentences, model, tokenizer):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -68,27 +79,67 @@ def get_sentence_embedding(sentences, model, tokenizer):
     
     return embeddings
 
-def semantic_search(query_sentence, model, tokenizer, all_sentences, all_embeddings, top_k=30):
+def semantic_search(query_sentence, model, tokenizer, all_sentences, embedding_chunk_paths, top_k=30):
     """
-    Performs semantic search to find the most similar sentences to a query sentence.
+    Performs semantic search to find the most similar sentences to a query sentence
+    by processing embeddings in chunks.
     """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     query_embedding = get_sentence_embedding([query_sentence], model, tokenizer)
-    
-    # Normalize embeddings for cosine similarity
-    query_embedding_norm = F.normalize(query_embedding, p=2, dim=1)
-    all_embeddings_norm = F.normalize(all_embeddings, p=2, dim=1)
-    
-    # Calculate cosine similarity
-    similarities = torch.mm(query_embedding_norm, all_embeddings_norm.transpose(0, 1))
-    
-    # Get the top_k most similar sentences
-    top_k_scores, top_k_indices = torch.topk(similarities, k=top_k, dim=1)
-    
-    print(f"\n--- Top {top_k} results for: \"{query_sentence}\" ---")
-    for i in range(top_k):
-        score = top_k_scores[0][i].item()
-        sentence = all_sentences[top_k_indices[0][i].item()]
+    query_embedding_norm = F.normalize(query_embedding, p=2, dim=1) # Normalize query once
+
+    # Initialize lists to store top results across all chunks
+    all_top_k_scores = []
+    all_top_k_indices = [] # These will be global indices relative to all_sentences
+
+    current_sentence_offset = 0
+
+    print(f"\n--- Searching for: \"{query_sentence}\" ---")
+    with alive_bar(len(embedding_chunk_paths), title="Searching embedding chunks") as bar:
+        for chunk_idx, chunk_path in enumerate(embedding_chunk_paths):
+            chunk_embeddings = torch.load(chunk_path, map_location=device) # Load chunk to device
+            chunk_embeddings_norm = F.normalize(chunk_embeddings, p=2, dim=1)
+
+            # Calculate cosine similarity for the current chunk
+            similarities = torch.mm(query_embedding_norm, chunk_embeddings_norm.transpose(0, 1))
+
+            # Get top_k results for the current chunk
+            # We need to get more than top_k from each chunk to ensure overall top_k
+            # A heuristic: get top 2*top_k or min(top_k, chunk_size)
+            k_in_chunk = min(top_k * 2, chunk_embeddings.size(0))
+            if k_in_chunk == 0: # Handle empty chunks
+                bar()
+                continue
+
+            chunk_top_k_scores, chunk_top_k_local_indices = torch.topk(similarities, k=k_in_chunk, dim=1)
+
+            # Convert local indices to global indices
+            chunk_top_k_global_indices = chunk_top_k_local_indices + current_sentence_offset
+
+            all_top_k_scores.append(chunk_top_k_scores.cpu())
+            all_top_k_indices.append(chunk_top_k_global_indices.cpu())
+            
+            current_sentence_offset += chunk_embeddings.size(0)
+            bar()
+
+    # Combine results from all chunks and get the overall top_k
+    if not all_top_k_scores: # Handle case where no embeddings were processed
+        print("No embeddings found to search.")
+        return
+
+    combined_scores = torch.cat(all_top_k_scores, dim=1)
+    combined_indices = torch.cat(all_top_k_indices, dim=1)
+
+    # Get the final overall top_k
+    final_top_k_scores, final_top_k_combined_indices = torch.topk(combined_scores, k=min(top_k, combined_scores.size(1)), dim=1)
+
+    print(f"\n--- Top {min(top_k, combined_scores.size(1))} results for: \"{query_sentence}\" ---")
+    for i in range(min(top_k, combined_scores.size(1))):
+        score = final_top_k_scores[0][i].item()
+        sentence_idx = final_top_k_combined_indices[0][i].item()
+        sentence = all_sentences[sentence_idx]
         print(f"  Score: {score:.4f} - \"{sentence}\"")
+
 
 def main():
     """Main function to drive the script."""
@@ -120,11 +171,11 @@ def main():
         print(f"An error occurred while loading the model or tokenizer: {e}")
         return
 
-    # --- Get Embeddings ---
-    all_sentences, all_embeddings = get_or_create_embeddings(config, model, tokenizer)
+    # --- Get Embeddings (chunked) ---
+    all_sentences, embedding_chunk_paths = generate_and_save_embeddings_in_chunks(config, model, tokenizer)
 
-    # --- Perform Search ---
-    semantic_search(args.query, model, tokenizer, all_sentences, all_embeddings, top_k=args.top_k)
+    # --- Perform Search (chunked) ---
+    semantic_search(args.query, model, tokenizer, all_sentences, embedding_chunk_paths, top_k=args.top_k)
 
 if __name__ == "__main__":
     main()
