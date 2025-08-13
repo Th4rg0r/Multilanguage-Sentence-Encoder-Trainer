@@ -41,7 +41,7 @@ optimize:
   max_train_batches_per_epoch: 1250 # Limits the number of training batches per epoch during optimization to speed up trials. Set to -1 for no limit.
   max_eval_batches_per_epoch: 250  # Limits the number of evaluation batches per epoch during optimization.
   batch_size: 32            # Fixed batch size for all optimization trials.
-  accumulation_steps: 4     # Fixed number of gradient accumulation steps.
+  accumulation_steps: 1     # Fixed number of gradient accumulation steps. actual batch_size is batch_size x accumulation_steps
   
   # --- Search Space ---
   optimizer_name: # A list of optimizers for Optuna to choose from.
