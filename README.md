@@ -203,3 +203,41 @@ if __name__ == '__main__':
         print(sentence_embeddings[0])
 ```
 
+
+## Semantic Search with `semantic_search.py`
+
+This project includes a powerful script, `semantic_search.py`, that allows you to perform semantic searches on a large text corpus using the final trained model. It efficiently handles large datasets by generating and searching through embedding chunks.
+
+### How It Works
+
+1.  **Embedding Generation**: The first time you run the script, it will encode all sentences from your `input.txt` file and save them into a `data/embedding_chunks/` directory. This is a one-time process.
+2.  **Efficient Searching**: On subsequent runs, the script will load these pre-computed embedding chunks, allowing for very fast semantic searches without needing to re-encode the entire dataset each time.
+
+### How to Use
+
+To perform a semantic search, run the script from your terminal with a query sentence:
+
+```bash
+python semantic_search.py "Your search query goes here"
+```
+
+**Example:**
+
+```bash
+python semantic_search.py "What are the main themes in this text?"
+```
+
+### Options
+
+-   `--top_k <number>`:  Specify the number of top results to return. The default is `30`.
+    
+    ```bash
+    python semantic_search.py "A question about the text" --top_k 5
+    ```
+
+-   `--new`: Force the script to regenerate the embedding chunks. Use this if your model has changed, you have updated your `input.txt` file or want to start fresh.
+
+    ```bash
+    python semantic_search.py "A new search query" --new
+    ```
+
