@@ -172,7 +172,7 @@ def main():
     
     # --- Load Model and Tokenizer ---
     model_path = config['final_model_path']
-    tokenizer_path = os.path.dirname(config["final_tokenizer_path"])
+    tokenizer_path = config["final_tokenizer_path"]
 
     if not os.path.exists(model_path) or not os.path.exists(tokenizer_path):
         print(f"Error: Model or tokenizer not found in '{model_dir}'.")
