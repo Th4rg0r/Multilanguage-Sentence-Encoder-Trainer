@@ -3,6 +3,7 @@
 # -------------------
 # Defines the source data and how it should be processed.
 data:
+  project_dir: .
   input_path: input.txt
   remove_duplicates: True     # If true, removes duplicate lines from the input file before splitting.
   no_duplicates_path: data/no_duplicates.txt
@@ -16,6 +17,7 @@ data:
 # -------------------
 # Defines the final output path for the production-ready model.
 final_model_path: out/model.pt
+final_tokenizer_path: out/tokenizer.json
 
 # -------------------
 # Tokenizer Settings
