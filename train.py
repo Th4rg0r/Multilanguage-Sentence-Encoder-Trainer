@@ -249,8 +249,6 @@ def run_training(config, start_from_scratch=False):
         print(f"Resuming training from saved model: {model_save_path}")
         checkpoint = torch.load(model_save_path)
         model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         best_eval_loss = checkpoint['best_eval_loss']
         start_epoch = checkpoint['epoch'] + 1
     else:
@@ -273,8 +271,6 @@ def run_training(config, start_from_scratch=False):
             print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving model to {model_save_path}")
             checkpoint = {
                 'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
                 'best_eval_loss': best_eval_loss,
                 'epoch': epoch
             }
@@ -374,8 +370,6 @@ def run_finetuning(config, start_from_scratch=False):
         print(f"Resuming fine-tuning from previously fine-tuned model: {finetuned_path}")
         checkpoint = torch.load(finetuned_path)
         model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         best_eval_loss = checkpoint['best_eval_loss']
         start_epoch = checkpoint['epoch'] + 1
     elif os.path.exists(pre_trained_path):
@@ -419,8 +413,6 @@ def run_finetuning(config, start_from_scratch=False):
             print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving finetuned model to {finetuned_path}")
             checkpoint = {
                 'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': scheduler.state_dict(),
                 'best_eval_loss': best_eval_loss,
                 'epoch': epoch
             }
