@@ -264,7 +264,22 @@ def run_training(config, start_from_scratch=False):
         
         print(f"Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
+        # Get current LR before step
+        current_lr = optimizer.param_groups[0]['lr']
+   
+        # Step the scheduler
         scheduler.step(avg_eval_loss)
+   
+        # Get new LR after step
+        new_lr = optimizer.param_groups[0]['lr']
+   
+        # Check if LR was reduced
+        if new_lr < current_lr:
+            print(f"Learning rate reduced from {current_lr:.1e} to {new_lr:.1e}. Loading best model weights...")
+            # Load the best checkpoint saved earlier
+            # Note: model_save_path (or finetuned_path) should point to the best saved checkpoint
+            loaded_checkpoint = torch.load(model_save_path) 
+            model.load_state_dict(loaded_checkpoint['model_state_dict'])
 
         if avg_eval_loss < best_eval_loss:
             best_eval_loss = avg_eval_loss
@@ -406,7 +421,22 @@ def run_finetuning(config, start_from_scratch=False):
         
         print(f"Finetune Epoch {epoch+1} Summary: Avg Train Loss: {avg_train_loss:.4f}, Avg Eval Loss: {avg_eval_loss:.4f}")
 
+        # Get current LR before step
+        current_lr = optimizer.param_groups[0]['lr']
+   
+        # Step the scheduler
         scheduler.step(avg_eval_loss)
+   
+        # Get new LR after step
+        new_lr = optimizer.param_groups[0]['lr']
+   
+        # Check if LR was reduced
+        if new_lr < current_lr:
+            print(f"Learning rate reduced from {current_lr:.1e} to {new_lr:.1e}. Loading best model weights...")
+            # Load the best checkpoint saved earlier
+            # Note: model_save_path (or finetuned_path) should point to the best saved checkpoint
+            loaded_checkpoint = torch.load(finetuned_path) 
+            model.load_state_dict(loaded_checkpoint['model_state_dict'])
 
         if avg_eval_loss < best_eval_loss:
             best_eval_loss = avg_eval_loss
