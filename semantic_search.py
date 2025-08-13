@@ -164,16 +164,15 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     parser = argparse.ArgumentParser(description="Perform semantic search using a trained sentence encoder.")
     parser.add_argument("query", type=str, help="The sentence to search for, enclosed in quotes.")
-    parser.add_argument("--top_k", type=int, default=30, help="The number of top results to display.")
+    parser.add_argument("--top_k", type=int, default=10, help="The number of top results to display.")
     parser.add_argument("--new", action="store_true", help="Regenerate embeddings even if they exist.")
     args = parser.parse_args()
 
     config = load_config()
     
     # --- Load Model and Tokenizer ---
-    model_dir = os.path.dirname(config['final_model_path'])
     model_path = config['final_model_path']
-    tokenizer_path = os.path.join(model_dir, 'tokenizer.json')
+    tokenizer_path = os.path.dirname(config["final_tokenizer_path"])
 
     if not os.path.exists(model_path) or not os.path.exists(tokenizer_path):
         print(f"Error: Model or tokenizer not found in '{model_dir}'.")
