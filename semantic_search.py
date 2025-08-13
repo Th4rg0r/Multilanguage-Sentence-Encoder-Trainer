@@ -141,12 +141,31 @@ def semantic_search(query_sentence, model, tokenizer, all_sentences, embedding_c
         print(f"  Score: {score:.4f} - \"{sentence}\"")
 
 
+def load_existing_chunks(config):
+    """
+    Loads paths to existing embedding chunks and the full list of sentences.
+    """
+    data_cfg = config['data']
+    input_file_path = os.path.join(data_cfg['project_dir'], data_cfg['input_path'])
+    EMBEDDING_CHUNKS_DIR = os.path.join(data_cfg['project_dir'], 'data/embedding_chunks')
+
+    with open(input_file_path, 'r', encoding='utf-8') as f:
+        sentences = [line.strip() for line in f if line.strip()]
+
+    embedding_chunk_paths = sorted([
+        os.path.join(EMBEDDING_CHUNKS_DIR, f)
+        for f in os.listdir(EMBEDDING_CHUNKS_DIR) if f.endswith('.pt')
+    ])
+
+    return sentences, embedding_chunk_paths
+
 def main():
     """Main function to drive the script."""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     parser = argparse.ArgumentParser(description="Perform semantic search using a trained sentence encoder.")
     parser.add_argument("query", type=str, help="The sentence to search for, enclosed in quotes.")
     parser.add_argument("--top_k", type=int, default=30, help="The number of top results to display.")
+    parser.add_argument("--new", action="store_true", help="Regenerate embeddings even if they exist.")
     args = parser.parse_args()
 
     config = load_config()
@@ -172,7 +191,17 @@ def main():
         return
 
     # --- Get Embeddings (chunked) ---
-    all_sentences, embedding_chunk_paths = generate_and_save_embeddings_in_chunks(config, model, tokenizer)
+    data_cfg = config['data']
+    EMBEDDING_CHUNKS_DIR = os.path.join(data_cfg['project_dir'], 'data/embedding_chunks')
+    
+    # Check if chunks exist and --new is not used
+    if not args.new and os.path.exists(EMBEDDING_CHUNKS_DIR) and os.listdir(EMBEDDING_CHUNKS_DIR):
+        print("Found existing embedding chunks. Loading them...")
+        all_sentences, embedding_chunk_paths = load_existing_chunks(config)
+    else:
+        print("Generating new embedding chunks...")
+        all_sentences, embedding_chunk_paths = generate_and_save_embeddings_in_chunks(config, model, tokenizer)
+
 
     # --- Perform Search (chunked) ---
     semantic_search(args.query, model, tokenizer, all_sentences, embedding_chunk_paths, top_k=args.top_k)
