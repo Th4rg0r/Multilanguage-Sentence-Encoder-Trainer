@@ -270,6 +270,7 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `Look what an unthrift in the world doth spend`
 4.  `Then in our measure do but vouchsafe one change.`
 5.  `Can you nominate in order now the degrees of the lie?`
+
 ...
 46. **`Where in the purlieus of this forest stands`**
 
@@ -284,6 +285,7 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `Which hath our several honours all engag’d`
 4.  `Of youth upon him, from which the world should note`
 5.  `* * * * * *`
+
 ...
 12837. **`And prey on garbage.`**
 
@@ -310,6 +312,7 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `night. O sweet Pistol! Away, Bardolph!`
 4.  `_ Not a flower, not a flower sweet,`
 5.  `Now, Master Shallow, you’ll complain of me to the King?`
+
 ...
 17. **`And I will speak, that so my heart may burst.`**
 
@@ -360,6 +363,7 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `The article of your oath, which you shall never`
 4.  `lion, that holds his pole-axe sitting on a close-stool, will be given`
 5.  `Th’ offence is not of such a bloody nature,`
+
 ...
 230. **`The least of you shall share his part thereof.`**
 
@@ -386,6 +390,7 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `GREEN - Servant to King Richard`
 4.  `[_Comes forward_.] Dumaine, thy love is far from charity,`
 5.  `Juno sings her blessings on you._`
+
 ...
 333. **`[_Aside_.] That such an ass should owe them.`**
 
