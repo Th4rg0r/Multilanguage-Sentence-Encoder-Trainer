@@ -258,118 +258,9 @@ Although this model was trained on English (specifically, the works of Shakespea
 ### Search Results
 
 The following examples demonstrate the model's performance in matching reformulated queries to their original sentences.
+To evaluate the model's performance, a set of 10 examples was created. The original sentences were randomly selected from the `input.txt` corpus, and new queries were formulated in a Shakespearean style.
 
 ### Example 1
-
-*   **Original:** `But could be willing to march on to Calais`
-*   **Query:** `Yet, I would be willing to march on to Calais.`
-*   **Rank:** 1
-
-1.  **`But could be willing to march on to Calais`**
-2.  `the dry fool drink, then is the fool not dry; bid the dishonest man`
-3.  `When were you wont to be so full of songs, sirrah?`
-4.  `To say they err, I dare not be so bold,`
-5.  `Which cannot look more hideously upon me`
-
-### Example 2
-
-*   **Original:** `In some of our best ports, and are at point`
-*   **Query:** `In some of our finest ports, and stand at point.`
-*   **Rank:** 1
-
-1.  **`In some of our best ports, and are at point`**
-2.  `knave very voluble; no further conscionable than in putting on the mere`
-3.  `Plainly conceive, I love you.`
-4.  `lady worse.`
-5.  `’Has broke my head across, and has given Sir Toby a bloody coxcomb too.`
-
-### Example 3
-
-*   **Original:** `Sun, hide thy beams, Timon hath done his reign.`
-*   **Query:** `Sun, conceal thy beams, for Timon's reign is done.`
-*   **Rank:** 1
-
-1.  **`Sun, hide thy beams, Timon hath done his reign.`**
-2.  `O had thy mother borne so hard a mind,`
-3.  `[_Offers the letter again._]`
-4.  `An humble heart.`
-5.  `For both hast thou, and both become the grave.`
-
-### Example 4
-
-*   **Original:** `And I will speak, that so my heart may burst.`
-*   **Query:** `And I shall speak, that so my heart may burst.`
-*   **Rank:** 17
-
-1.  `Should slip so grossly, both in the heat of blood`
-2.  `Now I do frown on thee with all my heart,`
-3.  `night. O sweet Pistol! Away, Bardolph!`
-4.  `_ Not a flower, not a flower sweet,`
-5.  `Now, Master Shallow, you’ll complain of me to the King?`
-
-...17. **`And I will speak, that so my heart may burst.`**
-
-### Example 5
-
-*   **Original:** `Where in the purlieus of this forest stands`
-*   **Query:** `Where, in the purlieus of this wood, doth stand?`
-*   **Rank:** 46
-
-1.  `Fight closer, or, good faith, you’ll catch a blow.`
-2.  `Where in the purlieus of this forest stands`
-3.  `Look what an unthrift in the world doth spend`
-4.  `Then in our measure do but vouchsafe one change.`
-5.  `Can you nominate in order now the degrees of the lie?`
-
-...46. **`Where in the purlieus of this forest stands`**
-
-### Example 6
-
-*   **Original:** `The least of you shall share his part thereof.`
-*   **Query:** `The least among you shall partake of his share.`
-*   **Rank:** 230
-
-1.  `I know you have determined to bestow her`
-2.  `No more than I am well acquitted of.`
-3.  `The article of your oath, which you shall never`
-4.  `lion, that holds his pole-axe sitting on a close-stool, will be given`
-5.  `Th’ offence is not of such a bloody nature,`
-
-...230. **`The least of you shall share his part thereof.`**
-
-### Example 7
-
-*   **Original:** `[_Aside_.] That such an ass should owe them.`
-*   **Query:** `That such a fool should be in their debt.`
-*   **Rank:** 333
-
-1.  `My good knave Costard, exceedingly well met.`
-2.  `_Why should this a desert be?`
-3.  `GREEN - Servant to King Richard`
-4.  `[_Comes forward_.] Dumaine, thy love is far from charity,`
-5.  `Juno sings her blessings on you._`
-
-...333. **`[_Aside_.] That such an ass should owe them.`**
-
-### Example 8
-
-*   **Original:** `And prey on garbage.`
-*   **Query:** `And feast upon that which the vultures leave.`
-*   **Rank:** 12837
-
-1.  `To let the wretched man outlive his wealth,`
-2.  `never out of my bones. I shall not fear fly-blowing.`
-3.  `Which hath our several honours all engag’d`
-4.  `Of youth upon him, from which the world should note`
-5.  `* * * * * *`
-
-...12837. **`And prey on garbage.`**
-
-## Further Evaluation
-
-To further evaluate the model's performance, a new set of 10 examples was created. The original sentences were randomly selected from the `input.txt` corpus, and new queries were formulated in a Shakespearean style.
-
-### Example 9
 
 *   **Original:** `Look in thy glass and tell the face thou viewest,`
 *   **Query:** `Gaze upon thy reflection, and spake to the visage thou dost see.`
@@ -381,7 +272,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 4.  `In charging you with matters, to commit you,`
 5.  `When thou wast here above the ground, I was`
 
-### Example 10
+### Example 2
 
 *   **Original:** `And see thy blood warm when thou feel’st it cold.`
 *   **Query:** `And feel thy blood course warm when thou art cold.`
@@ -393,7 +284,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 4.  `I likewise hear that Valentine is dead.`
 5.  `hyena, and that when thou are inclined to sleep.`
 
-### Example 11
+### Example 3
 
 *   **Original:** `And your sweet semblance to some other give.`
 *   **Query:** `And thy sweet likeness to another grant.`
@@ -405,7 +296,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 4.  `I’ll pray a thousand prayers for thy death,`
 5.  `The time will not allow the compliment`
 
-### Example 12
+### Example 4
 
 *   **Original:** `And for my self mine own worth do define,`
 *   **Query:** `And for myself, my own value I shall ascertain.`
@@ -417,7 +308,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 4.  `I pluck this white rose with Plantagenet.`
 5.  `to no more payments, fear no more tavern bills, which are often the`
 
-### Example 13
+### Example 5
 
 *   **Original:** `My body is the frame wherein ’tis held,`
 *   **Query:** `My form is the vessel in which it is contained.`
@@ -429,7 +320,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 4.  `I would learn that; for by the marks of sovereignty, knowledge and`
 5.  `Esteem none friends but such as are his friends,`
 
-### Example 14
+### Example 6
 
 *   **Original:** `For having traffic with thyself alone,`
 *   **Query:** `For conducting commerce with naught but thyself,`
@@ -443,7 +334,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 
 ...49. **`For having traffic with thyself alone,`**
 
-### Example 15
+### Example 7
 
 *   **Original:** `Making a famine where abundance lies,`
 *   **Query:** `Creating a dearth where plenty doth reside,`
@@ -457,7 +348,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 
 ...1211. **`Making a famine where abundance lies,`**
 
-### Example 16
+### Example 8
 
 *   **Original:** `Pity the world, or else this glutton be,`
 *   **Query:** `Have pity on the world, lest thou be a glutton.`
@@ -471,7 +362,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 
 ...1497. **`Pity the world, or else this glutton be,`**
 
-### Example 17
+### Example 9
 
 *   **Original:** `And summer’s green all girded up in sheaves`
 *   **Query:** `And summer's verdure all bound up in bundles,`
@@ -485,7 +376,7 @@ To further evaluate the model's performance, a new set of 10 examples was create
 
 ...1645. **`And summer’s green all girded up in sheaves`**
 
-### Example 18
+### Example 10
 
 *   **Original:** `His tender heir might bear his memory:`
 *   **Query:** `His gentle heir might carry on his name.`
@@ -501,8 +392,8 @@ To further evaluate the model's performance, a new set of 10 examples was create
 
 ### Analysis of Further Evaluation
 
-This second set of examples provides further insight into the model's capabilities. The model continues to perform well when the query is a close paraphrase of the original sentence. However, it struggles with more abstract or metaphorical reformulations.
+This set of examples provides insight into the model's capabilities. The model performs well when the query is a close paraphrase of the original sentence. However, it struggles with more abstract or metaphorical reformulations.
 
 For instance, the query "His gentle heir might carry on his name" for the original "His tender heir might bear his memory:" results in a very low rank. This suggests that the model has not fully grasped the metaphorical connection between "bearing memory" and "carrying on a name."
 
-These results reinforce the initial analysis: the model is a powerful tool for semantic search, but its understanding of language is more literal than abstract. Further training on a more diverse and abstract dataset could help to improve its performance on these more challenging queries.
+These results show that the model is a powerful tool for semantic search, but its understanding of language is more literal than abstract. Further training on a more diverse and abstract dataset could help to improve its performance on these more challenging queries.
