@@ -1,4 +1,3 @@
-
 import yaml
 import argparse
 import os
@@ -53,10 +52,6 @@ def generate_and_save_embeddings_in_chunks(config, model, tokenizer):
             chunk_file_path = os.path.join(EMBEDDING_CHUNKS_DIR, f'chunk_{chunk_idx}.pt')
             torch.save(chunk_embeddings_tensor.cpu(), chunk_file_path) # Save to CPU to avoid GPU memory issues
             all_chunk_paths.append(chunk_file_path)
-            bar()
-
-            embeddings = get_sentence_embedding(batch_sentences, model, tokenizer)
-            chunk_embeddings_list.append(embeddings)
             bar()
 
     
@@ -136,10 +131,11 @@ def semantic_search(query_sentence, model, tokenizer, all_sentences, embedding_c
     print(f"\n--- Top {min(top_k, combined_scores.size(1))} results for: \"{query_sentence}\" ---")
     for i in range(min(top_k, combined_scores.size(1))):
         score = final_top_k_scores[0][i].item()
-        sentence_idx = final_top_k_combined_indices[0][i].item()
-        sentence = all_sentences[sentence_idx]
+        # final_top_k_combined_indices contains the index within the combined_indices tensor
+        # We need to use this index to get the actual sentence index from combined_indices
+        actual_sentence_idx = combined_indices[0, final_top_k_combined_indices[0, i]].item()
+        sentence = all_sentences[actual_sentence_idx]
         print(f"  Score: {score:.4f} - \"{sentence}\"")
-
 
 def load_existing_chunks(config):
     """
