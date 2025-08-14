@@ -229,7 +229,7 @@ python semantic_search.py "What are the main themes in this text?"
 
 ### Options
 
--   `--top_k <number>`:  Specify the number of top results to return. The default is `30`.
+-   `--top_k <number>`:  Specify the number of top results to return. The default is `30`. 
     
     ```bash
     python semantic_search.py "A question about the text" --top_k 5
@@ -241,14 +241,13 @@ python semantic_search.py "What are the main themes in this text?"
     python semantic_search.py "A new search query" --new
     ```
 
-
 ## Case Study: Shakespearean Language Model
 
-This case study analyzes the performance of a sentence-embedding model trained on Shakespearean English. The model\'s ability to understand and match reformulated queries with their original counterparts is evaluated.
+This case study analyzes the performance of a sentence-embedding model trained on Shakespearean English. The model's ability to understand and match reformulated queries with their original counterparts is evaluated.
 
 ### Model Training and Optimization
 
-The model\'s architecture was optimized using Optuna over 50 iterations, with each iteration consisting of 5 epochs and 200 batches per epoch. After optimization, the model was trained for 24 epochs and then fine-tuned for 16 epochs using the default configuration.
+The model's architecture was optimized using Optuna over 50 iterations, with each iteration consisting of 5 epochs and 200 batches per epoch. After optimization, the model was trained for 24 epochs and then fine-tuned for 16 epochs using the default configuration.
 
 The training dataset consists of 105,591 sentences, and the test dataset consists of 11,733 sentences.
 
@@ -258,7 +257,7 @@ Although this model was trained on English (specifically, the works of Shakespea
 
 ### Search Results
 
-The following examples demonstrate the model\'s performance in matching reformulated queries to their original sentences.
+The following examples demonstrate the model's performance in matching reformulated queries to their original sentences.
 
 #### Example 1
 
@@ -394,9 +393,9 @@ The following examples demonstrate the model\'s performance in matching reformul
 
 The model demonstrates a good understanding of semantic similarity, particularly when the reformulated query retains a high degree of lexical and structural similarity to the original sentence. In cases where the query is a near-verbatim restatement of the original, the model consistently ranks the original sentence as the top result.
 
-However, the model\'s performance degrades significantly when the query introduces more substantial semantic shifts. For example, in the case of "And prey on garbage," the reformulated query "And feast upon that which the vultures leave" results in a very low rank for the original sentence. This suggests that the model is more reliant on surface-level features than on a deep understanding of the underlying meaning.
+However, the model's performance degrades significantly when the query introduces more substantial semantic shifts. For example, in the case of "And prey on garbage," the reformulated query "And feast upon that which the vultures leave" results in a very low rank for the original sentence. This suggests that the model is more reliant on surface-level features than on a deep understanding of the underlying meaning.
 
-The model\'s reliability is therefore dependent on the nature of the query. For straightforward semantic matching, it is highly reliable. For more nuanced or abstract reformulations, its performance is less predictable.
+The model's reliability is therefore dependent on the nature of the query. For straightforward semantic matching, it is highly reliable. For more nuanced or abstract reformulations, its performance is less predictable.
 
 ### Summary
 
