@@ -270,7 +270,6 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `Look what an unthrift in the world doth spend`
 4.  `Then in our measure do but vouchsafe one change.`
 5.  `Can you nominate in order now the degrees of the lie?`
-
 ...
 46. **`Where in the purlieus of this forest stands`**
 
@@ -285,7 +284,6 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `Which hath our several honours all engag’d`
 4.  `Of youth upon him, from which the world should note`
 5.  `* * * * * *`
-
 ...
 12837. **`And prey on garbage.`**
 
@@ -312,7 +310,6 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `night. O sweet Pistol! Away, Bardolph!`
 4.  `_ Not a flower, not a flower sweet,`
 5.  `Now, Master Shallow, you’ll complain of me to the King?`
-
 ...
 17. **`And I will speak, that so my heart may burst.`**
 
@@ -330,30 +327,6 @@ The following examples demonstrate the model's performance in matching reformula
 
 #### Example 6
 
-*   **Original:** `Lorenzo, and thy love.`
-*   **Query:** `Lorenzo, and thy love.`
-*   **Rank:** 1
-
-1.  **`Lorenzo, and thy love.`**
-2.  `Is in the field, and still his power increaseth.`
-3.  `To rob me of so rich a bottom here.`
-4.  `Comes breath perfum’d, that breedeth love by smelling.`
-5.  `tomorrow. Let him be furnished with divines, and have all charitable`
-
-#### Example 7
-
-*   **Original:** `Behold her topp’d?`
-*   **Query:** `Behold her, topp'd?`
-*   **Rank:** 1
-
-1.  **`Behold her topp’d?`**
-2.  `Let it not cumber your better remembrance.`
-3.  `Now to the Goths, as swift as swallow flies,`
-4.  `But soft, methinks I do digress too much,`
-5.  `My fortunes to your service, which are here`
-
-#### Example 8
-
 *   **Original:** `The least of you shall share his part thereof.`
 *   **Query:** `The least among you shall partake of his share.`
 *   **Rank:** 230
@@ -363,11 +336,10 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `The article of your oath, which you shall never`
 4.  `lion, that holds his pole-axe sitting on a close-stool, will be given`
 5.  `Th’ offence is not of such a bloody nature,`
-
 ...
 230. **`The least of you shall share his part thereof.`**
 
-#### Example 9
+#### Example 7
 
 *   **Original:** `Sun, hide thy beams, Timon hath done his reign.`
 *   **Query:** `Sun, conceal thy beams, for Timon's reign is done.`
@@ -379,7 +351,7 @@ The following examples demonstrate the model's performance in matching reformula
 4.  `An humble heart.`
 5.  `For both hast thou, and both become the grave.`
 
-#### Example 10
+#### Example 8
 
 *   **Original:** `[_Aside_.] That such an ass should owe them.`
 *   **Query:** `That such a fool should be in their debt.`
@@ -390,7 +362,6 @@ The following examples demonstrate the model's performance in matching reformula
 3.  `GREEN - Servant to King Richard`
 4.  `[_Comes forward_.] Dumaine, thy love is far from charity,`
 5.  `Juno sings her blessings on you._`
-
 ...
 333. **`[_Aside_.] That such an ass should owe them.`**
 
@@ -405,3 +376,150 @@ The model's reliability is therefore dependent on the nature of the query. For s
 ### Summary
 
 The Shakespearean language model is a capable tool for semantic search within its domain. It excels at matching queries that are lexically and structurally similar to the original text. However, its performance with more abstract or divergent queries indicates a need for further training and fine-tuning to improve its deep semantic understanding.
+
+## Further Evaluation
+
+To further evaluate the model's performance, a new set of 10 examples was created. The original sentences were randomly selected from the `input.txt` corpus, and new queries were formulated in a Shakespearean style.
+
+### Example 9
+
+*   **Original:** `Pity the world, or else this glutton be,`
+*   **Query:** `Have pity on the world, lest thou be a glutton.`
+*   **Rank:** 1497
+
+1.  `Marcus, even thou hast struck upon my crest,`
+2.  `Agamemnon—how if he had boils, full, all over, generally?`
+3.  `No pray thee, let it serve for table-talk.`
+4.  `Nothing but “Willow, willow, willow,” and between`
+5.  `You are betroth’d both to a maid and man.`
+
+...
+1497. **`Pity the world, or else this glutton be,`**
+
+### Example 10
+
+*   **Original:** `Look in thy glass and tell the face thou viewest,`
+*   **Query:** `Gaze upon thy reflection, and spake to the visage thou dost see.`
+*   **Rank:** 1
+
+1.  **`Look in thy glass and tell the face thou viewest,`**
+2.  `(Which still hath been both grave and prosperous)`
+3.  `Can cunning sin cover itself withal.`
+4.  `In charging you with matters, to commit you,`
+5.  `When thou wast here above the ground, I was`
+
+### Example 11
+
+*   **Original:** `For having traffic with thyself alone,`
+*   **Query:** `For conducting commerce with naught but thyself,`
+*   **Rank:** 49
+
+1.  `Why, look where he comes; and my good man too. He’s as far from`
+2.  `Till seven at night; to make society`
+3.  `I hope I shall know your honour better.`
+4.  `Shall I? O rare! By the Lord, I’ll be a brave judge.`
+5.  `At last it rains, and busy winds give o’er.`
+
+...
+49. **`For having traffic with thyself alone,`**
+
+### Example 12
+
+*   **Original:** `And see thy blood warm when thou feel’st it cold.`
+*   **Query:** `And feel thy blood course warm when thou art cold.`
+*   **Rank:** 1
+
+1.  **`And see thy blood warm when thou feel’st it cold.`**
+2.  `I, that am rudely stamped, and want love’s majesty`
+3.  `Thou rascal, that art worst in blood to run,`
+4.  `I likewise hear that Valentine is dead.`
+5.  `hyena, and that when thou are inclined to sleep.`
+
+### Example 13
+
+*   **Original:** `His tender heir might bear his memory:`
+*   **Query:** `His gentle heir might carry on his name.`
+*   **Rank:** 13819
+
+1.  `yourself from whipping, leap me over this stool and run away.`
+2.  `You fur your gloves with reason. Here are your reasons:`
+3.  `Good day, my lord.`
+4.  `Perpetual durance?`
+5.  `And there I left him tranc’d.`
+
+...
+13819. **`His tender heir might bear his memory:`**
+
+### Example 14
+
+*   **Original:** `Making a famine where abundance lies,`
+*   **Query:** `Creating a dearth where plenty doth reside,`
+*   **Rank:** 1211
+
+1.  `Where beauty’s veil doth cover every blot,`
+2.  `Aumerle._]`
+3.  `Convey him hence, and on our longboat’s side`
+4.  `Enter some, bringing in the Clerk of Chartham.`
+5.  `First, tell me, have you ever been at Pisa?`
+
+...
+1211. **`Making a famine where abundance lies,`**
+
+### Example 15
+
+*   **Original:** `And summer’s green all girded up in sheaves`
+*   **Query:** `And summer's verdure all bound up in bundles,`
+*   **Rank:** 1645
+
+1.  **`And summer’s green all girded up in sheaves`**
+2.  `The name of valour. [_Sees his dead father_.] O, let the vile world end`
+3.  `Away with her to prison. Go to, no more words.`
+4.  `Are all thrown down, and that which here stands up`
+5.  `Shall be the surety for their traitor father.`
+
+...
+1645. **`And summer’s green all girded up in sheaves`**
+
+### Example 16
+
+*   **Original:** `And your sweet semblance to some other give.`
+*   **Query:** `And thy sweet likeness to another grant.`
+*   **Rank:** 1
+
+1.  **`And your sweet semblance to some other give.`**
+2.  `My mother’s son, sir.`
+3.  `That fled the snares of watchful tyranny;`
+4.  `I’ll pray a thousand prayers for thy death,`
+5.  `The time will not allow the compliment`
+
+### Example 17
+
+*   **Original:** `And for my self mine own worth do define,`
+*   **Query:** `And for myself, my own value I shall ascertain.`
+*   **Rank:** 1
+
+1.  **`And for my self mine own worth do define,`**
+2.  `As I not for my self, but for thee will,`
+3.  `I leave an arrant knave with your worship; which I beseech your`
+4.  `I pluck this white rose with Plantagenet.`
+5.  `to no more payments, fear no more tavern bills, which are often the`
+
+### Example 18
+
+*   **Original:** `My body is the frame wherein ’tis held,`
+*   **Query:** `My form is the vessel in which it is contained.`
+*   **Rank:** 1
+
+1.  **`My body is the frame wherein ’tis held,`**
+2.  `Suggest his soon-believing adversaries,`
+3.  `With well-appointed powers. He is a man`
+4.  `I would learn that; for by the marks of sovereignty, knowledge and`
+5.  `Esteem none friends but such as are his friends,`
+
+### Analysis of Further Evaluation
+
+This second set of examples provides further insight into the model's capabilities. The model continues to perform well when the query is a close paraphrase of the original sentence. However, it struggles with more abstract or metaphorical reformulations.
+
+For instance, the query "His gentle heir might carry on his name" for the original "His tender heir might bear his memory:" results in a very low rank. This suggests that the model has not fully grasped the metaphorical connection between "bearing memory" and "carrying on a name."
+
+These results reinforce the initial analysis: the model is a powerful tool for semantic search, but its understanding of language is more literal than abstract. Further training on a more diverse and abstract dataset could help to improve its performance on these more challenging queries.
