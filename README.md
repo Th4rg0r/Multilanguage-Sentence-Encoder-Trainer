@@ -241,3 +241,163 @@ python semantic_search.py "What are the main themes in this text?"
     python semantic_search.py "A new search query" --new
     ```
 
+
+## Case Study: Shakespearean Language Model
+
+This case study analyzes the performance of a sentence-embedding model trained on Shakespearean English. The model\'s ability to understand and match reformulated queries with their original counterparts is evaluated.
+
+### Model Training and Optimization
+
+The model\'s architecture was optimized using Optuna over 50 iterations, with each iteration consisting of 5 epochs and 200 batches per epoch. After optimization, the model was trained for 24 epochs and then fine-tuned for 16 epochs using the default configuration.
+
+The training dataset consists of 105,591 sentences, and the test dataset consists of 11,733 sentences.
+
+### Multilingual Potential
+
+Although this model was trained on English (specifically, the works of Shakespeare), the underlying architecture and training process are language-agnostic. Because the model and tokenizer are trained from scratch on the provided text, this pipeline can be used for any language with a similar expectation of performance, provided a sufficiently large and clean dataset.
+
+### Search Results
+
+The following examples demonstrate the model\'s performance in matching reformulated queries to their original sentences.
+
+#### Example 1
+
+*   **Original:** `Where in the purlieus of this forest stands`
+*   **Query:** `Where, in the purlieus of this wood, doth stand?`
+*   **Rank:** 46
+
+1.  `Fight closer, or, good faith, you’ll catch a blow.`
+2.  `Where in the purlieus of this forest stands`
+3.  `Look what an unthrift in the world doth spend`
+4.  `Then in our measure do but vouchsafe one change.`
+5.  `Can you nominate in order now the degrees of the lie?`
+...
+46. **`Where in the purlieus of this forest stands`**
+
+#### Example 2
+
+*   **Original:** `And prey on garbage.`
+*   **Query:** `And feast upon that which the vultures leave.`
+*   **Rank:** 12837
+
+1.  `To let the wretched man outlive his wealth,`
+2.  `never out of my bones. I shall not fear fly-blowing.`
+3.  `Which hath our several honours all engag’d`
+4.  `Of youth upon him, from which the world should note`
+5.  `* * * * * *`
+...
+12837. **`And prey on garbage.`**
+
+#### Example 3
+
+*   **Original:** `But could be willing to march on to Calais`
+*   **Query:** `Yet, I would be willing to march on to Calais.`
+*   **Rank:** 1
+
+1.  **`But could be willing to march on to Calais`**
+2.  `the dry fool drink, then is the fool not dry; bid the dishonest man`
+3.  `When were you wont to be so full of songs, sirrah?`
+4.  `To say they err, I dare not be so bold,`
+5.  `Which cannot look more hideously upon me`
+
+#### Example 4
+
+*   **Original:** `And I will speak, that so my heart may burst.`
+*   **Query:** `And I shall speak, that so my heart may burst.`
+*   **Rank:** 17
+
+1.  `Should slip so grossly, both in the heat of blood`
+2.  `Now I do frown on thee with all my heart,`
+3.  `night. O sweet Pistol! Away, Bardolph!`
+4.  `_ Not a flower, not a flower sweet,`
+5.  `Now, Master Shallow, you’ll complain of me to the King?`
+...
+17. **`And I will speak, that so my heart may burst.`**
+
+#### Example 5
+
+*   **Original:** `In some of our best ports, and are at point`
+*   **Query:** `In some of our finest ports, and stand at point.`
+*   **Rank:** 1
+
+1.  **`In some of our best ports, and are at point`**
+2.  `knave very voluble; no further conscionable than in putting on the mere`
+3.  `Plainly conceive, I love you.`
+4.  `lady worse.`
+5.  `’Has broke my head across, and has given Sir Toby a bloody coxcomb too.`
+
+#### Example 6
+
+*   **Original:** `Lorenzo, and thy love.`
+*   **Query:** `Lorenzo, and thy love.`
+*   **Rank:** 1
+
+1.  **`Lorenzo, and thy love.`**
+2.  `Is in the field, and still his power increaseth.`
+3.  `To rob me of so rich a bottom here.`
+4.  `Comes breath perfum’d, that breedeth love by smelling.`
+5.  `tomorrow. Let him be furnished with divines, and have all charitable`
+
+#### Example 7
+
+*   **Original:** `Behold her topp’d?`
+*   **Query:** `Behold her, topp'd?`
+*   **Rank:** 1
+
+1.  **`Behold her topp’d?`**
+2.  `Let it not cumber your better remembrance.`
+3.  `Now to the Goths, as swift as swallow flies,`
+4.  `But soft, methinks I do digress too much,`
+5.  `My fortunes to your service, which are here`
+
+#### Example 8
+
+*   **Original:** `The least of you shall share his part thereof.`
+*   **Query:** `The least among you shall partake of his share.`
+*   **Rank:** 230
+
+1.  `I know you have determined to bestow her`
+2.  `No more than I am well acquitted of.`
+3.  `The article of your oath, which you shall never`
+4.  `lion, that holds his pole-axe sitting on a close-stool, will be given`
+5.  `Th’ offence is not of such a bloody nature,`
+...
+230. **`The least of you shall share his part thereof.`**
+
+#### Example 9
+
+*   **Original:** `Sun, hide thy beams, Timon hath done his reign.`
+*   **Query:** `Sun, conceal thy beams, for Timon's reign is done.`
+*   **Rank:** 1
+
+1.  **`Sun, hide thy beams, Timon hath done his reign.`**
+2.  `O had thy mother borne so hard a mind,`
+3.  `[_Offers the letter again._]`
+4.  `An humble heart.`
+5.  `For both hast thou, and both become the grave.`
+
+#### Example 10
+
+*   **Original:** `[_Aside_.] That such an ass should owe them.`
+*   **Query:** `That such a fool should be in their debt.`
+*   **Rank:** 333
+
+1.  `My good knave Costard, exceedingly well met.`
+2.  `_Why should this a desert be?`
+3.  `GREEN - Servant to King Richard`
+4.  `[_Comes forward_.] Dumaine, thy love is far from charity,`
+5.  `Juno sings her blessings on you._`
+...
+333. **`[_Aside_.] That such an ass should owe them.`**
+
+### Model Performance Analysis
+
+The model demonstrates a good understanding of semantic similarity, particularly when the reformulated query retains a high degree of lexical and structural similarity to the original sentence. In cases where the query is a near-verbatim restatement of the original, the model consistently ranks the original sentence as the top result.
+
+However, the model\'s performance degrades significantly when the query introduces more substantial semantic shifts. For example, in the case of "And prey on garbage," the reformulated query "And feast upon that which the vultures leave" results in a very low rank for the original sentence. This suggests that the model is more reliant on surface-level features than on a deep understanding of the underlying meaning.
+
+The model\'s reliability is therefore dependent on the nature of the query. For straightforward semantic matching, it is highly reliable. For more nuanced or abstract reformulations, its performance is less predictable.
+
+### Summary
+
+The Shakespearean language model is a capable tool for semantic search within its domain. It excels at matching queries that are lexically and structurally similar to the original text. However, its performance with more abstract or divergent queries indicates a need for further training and fine-tuning to improve its deep semantic understanding.
