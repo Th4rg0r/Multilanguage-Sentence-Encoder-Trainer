@@ -122,3 +122,17 @@ finetune:
     optimizer_name: RMSprop     # The optimizer. Possible values: "Adam", "AdamW", "RMSprop"
     dropout: 0.15               # The dropout rate.
     learning_rate: 1e-5         # The learning rate.
+
+# -------------------
+# QA Fine-Tuning Settings
+# -------------------
+# Settings for fine-tuning the model on QA data.
+finetuning_qa:
+  qa_yaml_path: data/hotpotqa_qa_data.yaml # Path to the QA YAML data file
+  epochs: 10
+  batch_size: 1 # Each batch corresponds to one article
+  temperature: 0.07
+  debiasing_lambda: 0.1
+  model_save_path: models/model_finetuned_qa.pt # Path to save the QA fine-tuned model weights.
+  scheduler_patience: 1
+  scheduler_factor: 0.5

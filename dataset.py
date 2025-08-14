@@ -15,6 +15,8 @@ import random
 import torch
 import os
 import subprocess
+import yaml
+from torch.utils.data import Dataset
 
 
 def get_file_line_cnt(fp):
@@ -226,3 +228,74 @@ class LazyLoader:
                 # Transformer expects key_padding_mask where True means **not** allowed
         return padded_src, src_mask
             
+
+class QADataset(Dataset):
+    def __init__(self, yaml_file_path, tokenizer):
+        self.tokenizer = tokenizer
+        with open(yaml_file_path, 'r', encoding='utf-8') as f:
+            self.data = yaml.safe_load(f)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        article = self.data[idx]
+        
+        title = article['title']
+        section_titles = [s['section_title'] for s in article['sections'] if 'section_title' in s]
+        
+        questions_by_section = []
+        sentences_by_paragraph = []
+
+        for section in article['sections']:
+            section_questions = []
+            section_sentences = []
+            if 'paragraphs' in section:
+                for paragraph in section['paragraphs']:
+                    if 'questions' in paragraph:
+                        section_questions.extend(paragraph['questions'])
+                    if 'sentences' in paragraph:
+                        section_sentences.extend(paragraph['sentences'])
+            questions_by_section.append(section_questions)
+            sentences_by_paragraph.append(section_sentences) # This might need to be flattened or handled differently based on how the loss expects it.
+
+        # Tokenize all text components
+        tokenized_title = self.tokenizer.encode(title).ids
+        tokenized_section_titles = [self.tokenizer.encode(s).ids for s in section_titles]
+        tokenized_questions_by_section = [[self.tokenizer.encode(q).ids for q in qs] for qs in questions_by_section]
+        tokenized_sentences_by_paragraph = [[self.tokenizer.encode(s).ids for s in ss] for ss in sentences_by_paragraph]
+
+        return {
+            'title': tokenized_title,
+            'section_titles': tokenized_section_titles,
+            'questions_by_section': tokenized_questions_by_section,
+            'sentences_by_paragraph': tokenized_sentences_by_paragraph
+        }
+
+def qa_collate_fn(batch, tokenizer):
+    # Since batch_size is 1 for QA finetuning, batch will contain a list with one item.
+    # We extract that item and convert lists of token IDs to tensors.
+    item = batch[0]
+
+    pad_id = tokenizer.token_to_id("<pad>")
+
+    def pad_and_stack(list_of_ids):
+        if not list_of_ids:
+            return torch.empty(0, dtype=torch.long)
+        max_len = max(len(ids) for ids in list_of_ids)
+        padded_ids = [ids + [pad_id] * (max_len - len(ids)) for ids in list_of_ids]
+        return torch.tensor(padded_ids, dtype=torch.long)
+
+    def pad_and_stack_nested(list_of_list_of_ids):
+        # This handles questions_by_section and sentences_by_paragraph
+        # It will return a list of tensors, where each tensor corresponds to a section/paragraph
+        return [pad_and_stack(sublist) for sublist in list_of_list_of_ids]
+
+    collated_batch = {
+        'title': torch.tensor(item['title'], dtype=torch.long),
+        'section_titles': pad_and_stack(item['section_titles']),
+        'questions_by_section': pad_and_stack_nested(item['questions_by_section']),
+        'sentences_by_paragraph': pad_and_stack_nested(item['sentences_by_paragraph'])
+    }
+    return collated_batch
+

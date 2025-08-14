@@ -88,6 +88,32 @@ class MPNet(nn.Module):
         logits = self.lm_head(sequence_output)  # [batch, seq, vocab_size]
         return logits
 
+    def get_sentence_embeddings(self, input_ids, attention_mask=None):
+        """
+        Returns the token embeddings (sequence_output) before the LM head.
+        Shape: [batch_size, sequence_length, embedding_dim]
+        """
+        batch_size, seq_len = input_ids.size()
+        position_ids = torch.arange(seq_len, dtype=torch.long, device=input_ids.device).unsqueeze(0).expand(batch_size, -1)
+        inputs_embeds = self.word_embeddings(input_ids) + self.position_embeddings(position_ids)
+        hidden_states = self.layer_norm(inputs_embeds)
+        hidden_states = self.dropout(hidden_states)
+
+        # Calculate relative_position as in forward()
+        context_position = position_ids.unsqueeze(-1)
+        memory_position = position_ids.unsqueeze(-2)
+        relative_position = memory_position - context_position # This will have shape [batch, seq, seq]
+
+        rp_bucket = self._relative_position_bucket(relative_position, num_buckets=32) # Pass relative_position
+        values = self.relative_attention_bias(rp_bucket)
+        values = values.permute(0, 3, 1, 2)
+
+        for layer in self.layers:
+            hidden_states = layer(hidden_states, attention_mask=attention_mask, position_bias=values)
+        
+        sequence_output = hidden_states
+        return sequence_output
+
     @staticmethod
     def _relative_position_bucket(relative_position, num_buckets=32, max_distance=128):
         """
