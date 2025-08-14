@@ -363,13 +363,6 @@ def run_finetuning(config, start_from_scratch=False):
 
     # --- Model Instantiation ---
     model_to_load = None
-    MPNet(
-        vocab_size=tokenizer.get_vocab_size(),
-        embedding_dim=base_model_params['embedding_dim'],
-        num_attention_heads=base_model_params['num_attention_heads'],
-        num_encoder_layers=base_model_params['num_encoder_layers'],
-        dropout=base_model_params['dropout']
-    )
     
     pre_trained_path = os.path.join(data_cfg['project_dir'], train_cfg['model_save_path'])
     finetuned_path = os.path.join(data_cfg['project_dir'], finetune_cfg['model_save_path'])
@@ -475,35 +468,34 @@ def run_finetuning(config, start_from_scratch=False):
                 'epoch': epoch
             }
             torch.save(checkpoint, finetuned_path)
-    
-    # --- Save Final Production Model ---
-    print("\n--- Fine-tuning complete. Saving final production-ready model. ---")
-    # 1. Create a fresh encoder instance with the same architecture
-    final_encoder = MPNet(
-        vocab_size=tokenizer.get_vocab_size(),
-        embedding_dim=base_model_params['embedding_dim'],
-        num_attention_heads=base_model_params['num_attention_heads'],
-        num_encoder_layers=base_model_params['num_encoder_layers'],
-        dropout=base_model_params['dropout']
-    )
-    # 2. Load the best fine-tuned weights into it
-    checkpoint = torch.load(finetuned_path)
-    final_encoder.load_state_dict(checkpoint['model_state_dict'])
+            # --- Save Final Production Model ---
 
-    # 3. Create the final SentenceMPNet wrapper
-    production_model = SentenceEncoder(encoder=final_encoder)
-    production_model.eval() # Set to evaluation mode
+            print("\n--- Fine-tuning complete. Saving final production-ready model. ---")
+            # 1. Create a fresh encoder instance with the same architecture
+            final_encoder = MPNet(
+                vocab_size=tokenizer.get_vocab_size(),
+                embedding_dim=base_model_params['embedding_dim'],
+                num_attention_heads=base_model_params['num_attention_heads'],
+                num_encoder_layers=base_model_params['num_encoder_layers'],
+                dropout=base_model_params['dropout']
+            )
+            # 2. Load the best fine-tuned weights into it
+            checkpoint = torch.load(finetuned_path)
+            final_encoder.load_state_dict(checkpoint['model_state_dict'])
 
-    # 4. Save the entire model object for easy use in other applications
-    final_model_path = os.path.join(data_cfg['project_dir'], config['final_model_path'])
-    print(f"Saving final model to: {final_model_path}")
-    torch.save(production_model, final_model_path)
+            # 3. Create the final SentenceMPNet wrapper
+            production_model = SentenceEncoder(encoder=final_encoder)
+            production_model.eval() # Set to evaluation mode
 
-    # 5. Save the tokenizer to the output directory for a self-contained package
-    dest_tokenizer_path = os.path.join(data_cfg['project_dir'], config['final_tokenizer_path'])
-    print(f"Saving tokenizer to: {dest_tokenizer_path}")
-    tokenizer.save(dest_tokenizer_path)
+            # 4. Save the entire model object for easy use in other applications
+            final_model_path = os.path.join(data_cfg['project_dir'], config['final_model_path'])
+            print(f"Saving final model to: {final_model_path}")
+            torch.save(production_model, final_model_path)
 
+            # 5. Save the tokenizer to the output directory for a self-contained package
+            dest_tokenizer_path = os.path.join(data_cfg['project_dir'], config['final_tokenizer_path'])
+            print(f"Saving tokenizer to: {dest_tokenizer_path}")
+            tokenizer.save(dest_tokenizer_path)
     print("Done.")
 
 
