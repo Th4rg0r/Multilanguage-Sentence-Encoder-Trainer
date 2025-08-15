@@ -6,6 +6,7 @@ import torch.nn as nn
 import optuna
 import json
 import math
+import random
 from alive_progress import alive_bar
 from torch.nn.utils import clip_grad_norm_
 
@@ -212,6 +213,62 @@ def evaluate(model, loader, collate_fn, criterion, device, config):
     result_loss = total_loss / (i + 1)
     print (f"Evaluation Loss:{result_loss}")
     return result_loss
+
+def evaluate_qa(model, loader, criterion, device):
+    """Evaluates the QA model on the evaluation set."""
+    model.eval()
+    total_loss = 0
+    with torch.no_grad(), alive_bar(len(loader)) as bar:
+        for i, batch in enumerate(loader):
+            # Tokenize and encode all components
+            article_title_ids = batch['title'].to(device)
+            section_titles_ids = [s.to(device) for s in batch['section_titles']]
+            questions_by_section_ids = [[q.to(device) for q in qs] for qs in batch['questions_by_section']]
+            sentences_by_paragraph_ids = [[s.to(device) for s in ss] for ss in batch['sentences_by_paragraph']]
+
+            # Create attention masks
+            article_title_mask = torch.ones_like(article_title_ids).to(device)
+            section_titles_masks = [torch.ones_like(s).to(device) for s in section_titles_ids]
+            questions_by_section_masks = [[torch.ones_like(q).to(device) for q in qs] for qs in questions_by_section_ids]
+            sentences_by_paragraph_masks = [[torch.ones_like(s).to(device) for s in ss] for ss in sentences_by_paragraph_ids]
+
+            article_title_embedding = mean_pooling(model.get_sentence_embeddings(article_title_ids.unsqueeze(0), article_title_mask.unsqueeze(0)), article_title_mask.unsqueeze(0))
+            
+            section_title_embeddings = []
+            for s_ids, s_mask in zip(section_titles_ids, section_titles_masks):
+                if s_ids.numel() > 0:
+                    section_title_embeddings.append(mean_pooling(model.get_sentence_embeddings(s_ids.unsqueeze(0), s_mask.unsqueeze(0)), s_mask.unsqueeze(0)))
+            
+            question_embeddings_by_section = []
+            for qs_ids_list, qs_masks_list in zip(questions_by_section_ids, questions_by_section_masks):
+                section_q_embeddings = []
+                for q_ids, q_mask in zip(qs_ids_list, qs_masks_list):
+                    if q_ids.numel() > 0:
+                        section_q_embeddings.append(mean_pooling(model.get_sentence_embeddings(q_ids.unsqueeze(0), q_mask.unsqueeze(0)), q_mask.unsqueeze(0)))
+                question_embeddings_by_section.append(section_q_embeddings)
+
+            sentence_embeddings_by_paragraph = []
+            for ss_ids_list, ss_masks_list in zip(sentences_by_paragraph_ids, sentences_by_paragraph_masks):
+                paragraph_s_embeddings = []
+                for s_ids, s_mask in zip(ss_ids_list, ss_masks_list):
+                    if s_ids.numel() > 0:
+                        paragraph_s_embeddings.append(mean_pooling(model.get_sentence_embeddings(s_ids.unsqueeze(0), s_mask.unsqueeze(0)), s_mask.unsqueeze(0)))
+                sentence_embeddings_by_paragraph.append(paragraph_s_embeddings)
+
+            # Compute loss
+            loss = criterion(
+                article_title_embedding,
+                section_title_embeddings,
+                question_embeddings_by_section,
+                sentence_embeddings_by_paragraph
+            )
+            total_loss += loss.item()
+            bar.text(f"Eval Loss: {loss.item():.4f}")
+            bar()
+    
+    avg_eval_loss = total_loss / len(loader)
+    print(f"QA Evaluation Summary: Avg Eval Loss: {avg_eval_loss:.4f}")
+    return avg_eval_loss
 
 # -------------------
 # Main Workflows
@@ -510,20 +567,28 @@ def run_finetune_QA(config, start_from_scratch=False):
     tokenizer_cfg = config['tokenizer']
     train_cfg = config['train']
     finetune_qa_cfg = config['finetuning_qa']
+    eval_model_path = finetune_qa_cfg.get('eval_model_path')
 
     # --- Load Tokenizer & Dataloaders ---
     tokenizer = Tokenizer.from_file(os.path.join(data_cfg['project_dir'], tokenizer_cfg['save_path']))
     
-    qa_dataset = QADataset(os.path.join(data_cfg['project_dir'], finetune_qa_cfg['qa_yaml_path']), tokenizer)
-    qa_dataloader = torch.utils.data.DataLoader(
-        qa_dataset,
+    train_qa_dataset = QADataset(os.path.join(data_cfg['project_dir'], data_cfg['qa_train_path']), tokenizer)
+    train_qa_dataloader = torch.utils.data.DataLoader(
+        train_qa_dataset,
         batch_size=finetune_qa_cfg['batch_size'], # Should be 1
         shuffle=True,
         collate_fn=lambda batch: qa_collate_fn(batch, tokenizer)
     )
 
+    test_qa_dataset = QADataset(os.path.join(data_cfg['project_dir'], data_cfg['qa_test_path']), tokenizer)
+    test_qa_dataloader = torch.utils.data.DataLoader(
+        test_qa_dataset,
+        batch_size=finetune_qa_cfg['batch_size'], # Should be 1
+        shuffle=False,
+        collate_fn=lambda batch: qa_collate_fn(batch, tokenizer)
+    )
+
     # --- Model Instantiation ---
-    # Load base model parameters from pre-training config
     base_model_params = get_model_params_from_config(train_cfg, config['optimize']['study_name'], config['optimize']['storage_name'])
 
     model = MPNet(
@@ -538,13 +603,12 @@ def run_finetune_QA(config, start_from_scratch=False):
     start_epoch = 0
     best_eval_loss = float('inf')
     finetuned_qa_path = os.path.join(data_cfg['project_dir'], finetune_qa_cfg['model_save_path'])
-    pre_trained_path = os.path.join(data_cfg['project_dir'], train_cfg['model_save_path'])
-
+    
     # --- Optimizer, Criterion & Scheduler ---
     optimizer = get_optimizer(
-       base_model_params['optimizer_name'], # Using optimizer from base model params
+       base_model_params['optimizer_name'],
        model.parameters(),
-       base_model_params['learning_rate'] # Using LR from base model params
+       base_model_params['learning_rate']
     )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
        optimizer,
@@ -559,137 +623,135 @@ def run_finetune_QA(config, start_from_scratch=False):
     )
 
     # --- Model Loading Logic ---
-    if not start_from_scratch and os.path.exists(finetuned_qa_path):
+    if eval_model_path:
+        print(f"Loading model for evaluation from: {eval_model_path}")
+        checkpoint = torch.load(eval_model_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+    elif not start_from_scratch and os.path.exists(finetuned_qa_path):
         print(f"Resuming QA fine-tuning from previously fine-tuned model: {finetuned_qa_path}")
         checkpoint = torch.load(finetuned_qa_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         best_eval_loss = checkpoint['best_eval_loss']
         start_epoch = checkpoint['epoch'] + 1
-    elif os.path.exists(pre_trained_path):
-        print(f"Starting new QA fine-tuning session from pre-trained model: {pre_trained_path}")
-        checkpoint = torch.load(pre_trained_path)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        best_eval_loss = float('inf')
-        start_epoch = 0
     else:
-        print(f"Error: Pre-trained model not found at {pre_trained_path}. Please run pre-training first.")
-        return
+        base_model_path = os.path.join(data_cfg['project_dir'], finetune_qa_cfg['base_model_path'])
+        if os.path.exists(base_model_path):
+            print(f"Starting new QA fine-tuning session from base model: {base_model_path}")
+            checkpoint = torch.load(base_model_path)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            best_eval_loss = float('inf')
+            start_epoch = 0
+        else:
+            print(f"Error: Base model not found at {base_model_path}. Please provide a valid path in config.yaml.")
+            return
 
     # --- QA Fine-Tuning Loop ---
-    for epoch in range(start_epoch, start_epoch + finetune_qa_cfg['epochs']):
-        print(f"\n--- QA Finetune Epoch {epoch+1}/{start_epoch + finetune_qa_cfg['epochs']} ---")
-        model.train()
-        total_loss = 0
-        
-        with alive_bar(len(qa_dataloader)) as bar:
-            for i, batch in enumerate(qa_dataloader):
-                optimizer.zero_grad()
-
-                # Tokenize and encode all components
-                # batch contains: 'title', 'section_titles', 'questions_by_section', 'sentences_by_paragraph'
-                
-                # Ensure all inputs are on the correct device
-                article_title_ids = batch['title'].to(device)
-                section_titles_ids = [s.to(device) for s in batch['section_titles']]
-                questions_by_section_ids = [[q.to(device) for q in qs] for qs in batch['questions_by_section']]
-                sentences_by_paragraph_ids = [[s.to(device) for s in ss] for ss in batch['sentences_by_paragraph']]
-
-                # Generate embeddings
-                # For single items (like title), unsqueeze to add batch dimension if model expects it
-                
-                # Create attention masks
-                article_title_mask = torch.ones_like(article_title_ids).to(device)
-                section_titles_masks = [torch.ones_like(s).to(device) for s in section_titles_ids]
-                questions_by_section_masks = [[torch.ones_like(q).to(device) for q in qs] for qs in questions_by_section_ids]
-                sentences_by_paragraph_masks = [[torch.ones_like(s).to(device) for s in ss] for ss in sentences_by_paragraph_ids]
-
-                article_title_embedding = mean_pooling(model.get_sentence_embeddings(article_title_ids.unsqueeze(0), article_title_mask.unsqueeze(0)), article_title_mask.unsqueeze(0))
-                
-                section_title_embeddings = []
-                for s_ids, s_mask in zip(section_titles_ids, section_titles_masks):
-                    if s_ids.numel() > 0:
-                        section_title_embeddings.append(mean_pooling(model.get_sentence_embeddings(s_ids.unsqueeze(0), s_mask.unsqueeze(0)), s_mask.unsqueeze(0)))
-                
-                question_embeddings_by_section = []
-                for qs_ids_list, qs_masks_list in zip(questions_by_section_ids, questions_by_section_masks):
-                    section_q_embeddings = []
-                    for q_ids, q_mask in zip(qs_ids_list, qs_masks_list):
-                        if q_ids.numel() > 0:
-                            section_q_embeddings.append(mean_pooling(model.get_sentence_embeddings(q_ids.unsqueeze(0), q_mask.unsqueeze(0)), q_mask.unsqueeze(0)))
-                    question_embeddings_by_section.append(section_q_embeddings)
-
-                sentence_embeddings_by_paragraph = []
-                for ss_ids_list, ss_masks_list in zip(sentences_by_paragraph_ids, sentences_by_paragraph_masks):
-                    paragraph_s_embeddings = []
-                    for s_ids, s_mask in zip(ss_ids_list, ss_masks_list):
-                        if s_ids.numel() > 0:
-                            paragraph_s_embeddings.append(mean_pooling(model.get_sentence_embeddings(s_ids.unsqueeze(0), s_mask.unsqueeze(0)), s_mask.unsqueeze(0)))
-                    sentence_embeddings_by_paragraph.append(paragraph_s_embeddings)
-
-                # Compute loss
-                loss = criterion(
-                    article_title_embedding,
-                    section_title_embeddings,
-                    question_embeddings_by_section,
-                    sentence_embeddings_by_paragraph
-                )
-                
-                loss.backward()
-                clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
-                total_loss += loss.item()
-                bar.text(f"Loss: {loss.item():.4f}")
-                bar()
-        
-        avg_train_loss = total_loss / len(qa_dataloader)
-        print(f"QA Finetune Epoch {epoch+1}/{start_epoch + finetune_qa_cfg['epochs']} Summary: Avg Train Loss: {avg_train_loss:.4f}")
-
-        # Evaluation (can be simplified for now, or use a separate eval set if available)
-        # For simplicity, we'll just use the training loss as an indicator for now.
-        # A proper evaluation would involve a separate QA test set and metrics.
-        avg_eval_loss = avg_train_loss # Placeholder for now
-
-        current_lr = optimizer.param_groups[0]['lr']
-        scheduler.step(avg_eval_loss)
-        new_lr = optimizer.param_groups[0]['lr']
-
-        if new_lr < current_lr:
-            print(f"Learning rate reduced from {current_lr:.1e} to {new_lr:.1e}. Loading best model weights...")
-            loaded_checkpoint = torch.load(finetuned_qa_path) 
-            model.load_state_dict(loaded_checkpoint['model_state_dict'])
-
-        if avg_eval_loss < best_eval_loss:
-            best_eval_loss = avg_eval_loss
-            print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving QA finetuned model to {finetuned_qa_path}")
-            checkpoint = {
-                'model_state_dict': model.state_dict(),
-                'best_eval_loss': best_eval_loss,
-                'epoch': epoch
-            }
-            torch.save(checkpoint, finetuned_qa_path)
+    if eval_model_path:
+        # Just run evaluation
+        evaluate_qa(model, test_qa_dataloader, criterion, device)
+    else:
+        for epoch in range(start_epoch, start_epoch + finetune_qa_cfg['epochs']):
+            print(f"\n--- QA Finetune Epoch {epoch+1}/{start_epoch + finetune_qa_cfg['epochs']} ---")
+            model.train()
+            total_loss = 0
             
-            # Save final production model (SentenceEncoder)
-            print("\n--- QA Fine-tuning complete. Saving final production-ready model. ---")
-            final_encoder = MPNet(
-                vocab_size=tokenizer.get_vocab_size(),
-                embedding_dim=base_model_params['embedding_dim'],
-                num_attention_heads=base_model_params['num_attention_heads'],
-                num_encoder_layers=base_model_params['num_encoder_layers'],
-                dropout=base_model_params['dropout']
-            )
-            checkpoint = torch.load(finetuned_qa_path)
-            final_encoder.load_state_dict(checkpoint['model_state_dict'])
+            with alive_bar(len(train_qa_dataloader)) as bar:
+                for i, batch in enumerate(train_qa_dataloader):
+                    optimizer.zero_grad()
+                    
+                    article_title_ids = batch['title'].to(device)
+                    section_titles_ids = [s.to(device) for s in batch['section_titles']]
+                    questions_by_section_ids = [[q.to(device) for q in qs] for qs in batch['questions_by_section']]
+                    sentences_by_paragraph_ids = [[s.to(device) for s in ss] for ss in batch['sentences_by_paragraph']]
 
-            production_model = SentenceEncoder(encoder=final_encoder)
-            production_model.eval()
+                    article_title_mask = torch.ones_like(article_title_ids).to(device)
+                    section_titles_masks = [torch.ones_like(s).to(device) for s in section_titles_ids]
+                    questions_by_section_masks = [[torch.ones_like(q).to(device) for q in qs] for qs in questions_by_section_ids]
+                    sentences_by_paragraph_masks = [[torch.ones_like(s).to(device) for s in ss] for ss in sentences_by_paragraph_ids]
 
-            final_model_path = os.path.join(data_cfg['project_dir'], config['final_model_path'])
-            print(f"Saving final model to: {final_model_path}")
-            torch.save(production_model, final_model_path)
+                    article_title_embedding = mean_pooling(model.get_sentence_embeddings(article_title_ids.unsqueeze(0), article_title_mask.unsqueeze(0)), article_title_mask.unsqueeze(0))
+                    
+                    section_title_embeddings = []
+                    for s_ids, s_mask in zip(section_titles_ids, section_titles_masks):
+                        if s_ids.numel() > 0:
+                            section_title_embeddings.append(mean_pooling(model.get_sentence_embeddings(s_ids.unsqueeze(0), s_mask.unsqueeze(0)), s_mask.unsqueeze(0)))
+                    
+                    question_embeddings_by_section = []
+                    for qs_ids_list, qs_masks_list in zip(questions_by_section_ids, questions_by_section_masks):
+                        section_q_embeddings = []
+                        for q_ids, q_mask in zip(qs_ids_list, qs_masks_list):
+                            if q_ids.numel() > 0:
+                                section_q_embeddings.append(mean_pooling(model.get_sentence_embeddings(q_ids.unsqueeze(0), q_mask.unsqueeze(0)), q_mask.unsqueeze(0)))
+                        question_embeddings_by_section.append(section_q_embeddings)
 
-            dest_tokenizer_path = os.path.join(data_cfg['project_dir'], config['final_tokenizer_path'])
-            print(f"Saving tokenizer to: {dest_tokenizer_path}")
-            tokenizer.save(dest_tokenizer_path)
+                    sentence_embeddings_by_paragraph = []
+                    for ss_ids_list, ss_masks_list in zip(sentences_by_paragraph_ids, sentences_by_paragraph_masks):
+                        paragraph_s_embeddings = []
+                        for s_ids, s_mask in zip(ss_ids_list, ss_masks_list):
+                            if s_ids.numel() > 0:
+                                paragraph_s_embeddings.append(mean_pooling(model.get_sentence_embeddings(s_ids.unsqueeze(0), s_mask.unsqueeze(0)), s_mask.unsqueeze(0)))
+                        sentence_embeddings_by_paragraph.append(paragraph_s_embeddings)
+
+                    loss = criterion(
+                        article_title_embedding,
+                        section_title_embeddings,
+                        question_embeddings_by_section,
+                        sentence_embeddings_by_paragraph
+                    )
+                    
+                    loss.backward()
+                    clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    optimizer.step()
+                    total_loss += loss.item()
+                    bar.text(f"Loss: {loss.item():.4f}")
+                    bar()
+            
+            avg_train_loss = total_loss / len(train_qa_dataloader)
+            print(f"QA Finetune Epoch {epoch+1}/{start_epoch + finetune_qa_cfg['epochs']} Summary: Avg Train Loss: {avg_train_loss:.4f}")
+
+            avg_eval_loss = evaluate_qa(model, test_qa_dataloader, criterion, device)
+
+            current_lr = optimizer.param_groups[0]['lr']
+            scheduler.step(avg_eval_loss)
+            new_lr = optimizer.param_groups[0]['lr']
+
+            if new_lr < current_lr:
+                print(f"Learning rate reduced from {current_lr:.1e} to {new_lr:.1e}. Loading best model weights...")
+                loaded_checkpoint = torch.load(finetuned_qa_path) 
+                model.load_state_dict(loaded_checkpoint['model_state_dict'])
+
+            if avg_eval_loss < best_eval_loss:
+                best_eval_loss = avg_eval_loss
+                print(f"New best evaluation loss: {best_eval_loss:.4f}. Saving QA finetuned model to {finetuned_qa_path}")
+                checkpoint = {
+                    'model_state_dict': model.state_dict(),
+                    'best_eval_loss': best_eval_loss,
+                    'epoch': epoch
+                }
+                torch.save(checkpoint, finetuned_qa_path)
+                
+                print("\n--- QA Fine-tuning complete. Saving final production-ready model. ---")
+                final_encoder = MPNet(
+                    vocab_size=tokenizer.get_vocab_size(),
+                    embedding_dim=base_model_params['embedding_dim'],
+                    num_attention_heads=base_model_params['num_attention_heads'],
+                    num_encoder_layers=base_model_params['num_encoder_layers'],
+                    dropout=base_model_params['dropout']
+                )
+                checkpoint = torch.load(finetuned_qa_path)
+                final_encoder.load_state_dict(checkpoint['model_state_dict'])
+
+                production_model = SentenceEncoder(encoder=final_encoder)
+                production_model.eval()
+
+                final_model_path = os.path.join(data_cfg['project_dir'], config['final_model_path'])
+                print(f"Saving final model to: {final_model_path}")
+                torch.save(production_model, final_model_path)
+
+                dest_tokenizer_path = os.path.join(data_cfg['project_dir'], config['final_tokenizer_path'])
+                print(f"Saving tokenizer to: {dest_tokenizer_path}")
+                tokenizer.save(dest_tokenizer_path)
+
     print("Done.")
 
 
@@ -788,15 +850,44 @@ def run_optimization(config, start_new_study=False):
     for key, value in study.best_params.items():
         print(f"  {key}: {value}")
 
-
 # -------------------
 # Main Entry Point
 # -------------------
+
+def setup_qa_data(config):
+    """Splits the input_qa.yaml into test and train sets, ensuring articles stay together."""
+    print("--- Setting up QA Data ---")
+    data_cfg = config['data']
+    project_dir = data_cfg['project_dir']
+    
+    input_qa_path = os.path.join(project_dir, data_cfg['input_qa_path'])
+    train_qa_path = os.path.join(project_dir, data_cfg['qa_train_path'])
+    test_qa_path = os.path.join(project_dir, data_cfg['qa_test_path'])
+
+    with open(input_qa_path, 'r') as f:
+        articles = yaml.safe_load(f)
+
+    random.shuffle(articles)
+
+    test_size = data_cfg['qa_test_size']
+    split_index = int(len(articles) * (1 - test_size))
+
+    train_articles = articles[:split_index]
+    test_articles = articles[split_index:]
+
+    with open(train_qa_path, 'w') as f:
+        yaml.dump(train_articles, f, indent=2)
+    print(f"Saved {len(train_articles)} articles to {train_qa_path}")
+
+    with open(test_qa_path, 'w') as f:
+        yaml.dump(test_articles, f, indent=2)
+    print(f"Saved {len(test_articles)} articles to {test_qa_path}")
 
 def main():
     """Main function to drive the script."""
     parser = argparse.ArgumentParser(description="Multilanguage Sentence Encoder Trainer")
     parser.add_argument('--setup_data', action='store_true', help='Run the initial data setup (splitting and de-duplicating).')
+    parser.add_argument('--setup_qa_data', action='store_true', help='Splits the input_qa.yaml into test and train sets, and copies it to the data directory.')
     parser.add_argument('--setup_tokenizer', action='store_true', help='(Re)create the tokenizer.')
     parser.add_argument('--optimize', action='store_true', help='Run hyperparameter optimization with Optuna.')
     parser.add_argument('--finetune', action='store_true', help='Run contrastive learning fine-tuning on a pre-trained model.')
@@ -844,6 +935,10 @@ def main():
         tokenizer = tokenize(os.path.join(project_dir, data_cfg['train_path']), tokenizer_cfg)
         tokenizer.save(os.path.join(project_dir, tokenizer_cfg['save_path']))
         print(f"Tokenizer saved to {tokenizer_cfg['save_path']}")
+        return # Exit after setup
+
+    if args.setup_qa_data:
+        setup_qa_data(config)
         return # Exit after setup
 
     # --- Main Action ---
